@@ -17,7 +17,7 @@ class CycleHeuristic:
     """Implements the cycle-based heuristic for route optimization."""
 
     CYCLE_DISTANCE_THRESHOLD = 6  # Max hex distance to nearest task when adding to cluster
-    MAX_CYCLE_TASKS = 5  # Target smaller cycles for better spatial separation
+    MAX_CYCLE_TASKS = 8  # Target smaller cycles for better spatial separation
 
     def __init__(self, grid: HexGrid, task_manager: TaskManager):
         self.grid = grid

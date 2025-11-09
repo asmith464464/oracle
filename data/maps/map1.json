@@ -1,0 +1,1134 @@
+{
+  "zeus_tile": "tile_043",
+  "tiles": [
+    {
+      "id": "tile_001",
+      "type": "statue_source",
+      "coords": [
+        4,
+        0
+      ],
+      "colours": [
+        "red"
+      ]
+    },
+    {
+      "id": "tile_002",
+      "type": "water",
+      "coords": [
+        5,
+        0
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_003",
+      "type": "shrine",
+      "coords": [
+        6,
+        0
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_004",
+      "type": "water",
+      "coords": [
+        7,
+        0
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_005",
+      "type": "statue_island",
+      "coords": [
+        8,
+        0
+      ],
+      "colours": [
+        "pink", "yellow", "green"
+      ]
+    },
+    {
+      "id": "tile_006",
+      "type": "statue_source",
+      "coords": [
+        9,
+        0
+      ],
+      "colours": [
+        "yellow"
+      ]
+    },
+    {
+      "id": "tile_007",
+      "type": "temple",
+      "coords": [
+        3,
+        1
+      ],
+      "colours": [
+        "green"
+      ]
+    },
+    {
+      "id": "tile_008",
+      "type": "water",
+      "coords": [
+        4,
+        1
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_009",
+      "type": "offering",
+      "coords": [
+        5,
+        1
+      ],
+      "colours": [
+        "black", "green"
+      ]
+    },
+    {
+      "id": "tile_010",
+      "type": "water",
+      "coords": [
+        6,
+        1
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_011",
+      "type": "water",
+      "coords": [
+        7,
+        1
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_012",
+      "type": "water",
+      "coords": [
+        8,
+        1
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_013",
+      "type": "water",
+      "coords": [
+        9,
+        1
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_014",
+      "type": "water",
+      "coords": [
+        10,
+        1
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_015",
+      "type": "temple",
+      "coords": [
+        11,
+        1
+      ],
+      "colours": [
+        "blue"
+      ]
+    },
+    {
+      "id": "tile_016",
+      "type": "shrine",
+      "coords": [
+        12,
+        1
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_017",
+      "type": "water",
+      "coords": [
+        3,
+        2
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_018",
+      "type": "water",
+      "coords": [
+        4,
+        2
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_019",
+      "type": "water",
+      "coords": [
+        5,
+        2
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_020",
+      "type": "monster",
+      "coords": [
+        6,
+        2
+      ],
+      "colours": [
+        "pink"
+      ]
+    },
+    {
+      "id": "tile_021",
+      "type": "water",
+      "coords": [
+        7,
+        2
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_022",
+      "type": "temple",
+      "coords": [
+        8,
+        2
+      ],
+      "colours": [
+        "yellow"
+      ]
+    },
+    {
+      "id": "tile_023",
+      "type": "shrine",
+      "coords": [
+        9,
+        2
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_024",
+      "type": "water",
+      "coords": [
+        11,
+        2
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_025",
+      "type": "water",
+      "coords": [
+        12,
+        2
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_026",
+      "type": "monster",
+      "coords": [
+        13,
+        2
+      ],
+      "colours": [
+        "yellow"
+      ]
+    },
+    {
+      "id": "tile_027",
+      "type": "monster",
+      "coords": [
+        2,
+        3
+      ],
+      "colours": [
+        "green"
+      ]
+    },
+    {
+      "id": "tile_028",
+      "type": "monster",
+      "coords": [
+        3,
+        3
+      ],
+      "colours": [
+        "yellow", "blue"
+      ]
+    },
+    {
+      "id": "tile_029",
+      "type": "shrine",
+      "coords": [
+        4,
+        3
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_030",
+      "type": "water",
+      "coords": [
+        5,
+        3
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_031",
+      "type": "water",
+      "coords": [
+        6,
+        3
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_032",
+      "type": "water",
+      "coords": [
+        7,
+        3
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_033",
+      "type": "temple",
+      "coords": [
+        8,
+        3
+      ],
+      "colours": [
+        "red"
+      ]
+    },
+    {
+      "id": "tile_034",
+      "type": "water",
+      "coords": [
+        9,
+        3
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_035",
+      "type": "monster",
+      "coords": [
+        10,
+        3
+      ],
+      "colours": [
+        "blue"
+      ]
+    },
+    {
+      "id": "tile_036",
+      "type": "water",
+      "coords": [
+        11,
+        3
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_037",
+      "type": "water",
+      "coords": [
+        12,
+        3
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_038",
+      "type": "water",
+      "coords": [
+        2,
+        4
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_039",
+      "type": "water",
+      "coords": [
+        3,
+        4
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_040",
+      "type": "temple",
+      "coords": [
+        4,
+        4
+      ],
+      "colours": [
+        "black"
+      ]
+    },
+    {
+      "id": "tile_041",
+      "type": "water",
+      "coords": [
+        5,
+        4
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_042",
+      "type": "water",
+      "coords": [
+        6,
+        4
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_043",
+      "type": "water",
+      "coords": [
+        7,
+        4
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_044",
+      "type": "water",
+      "coords": [
+        8,
+        4
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_045",
+      "type": "water",
+      "coords": [
+        9,
+        4
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_046",
+      "type": "water",
+      "coords": [
+        10,
+        4
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_047",
+      "type": "water",
+      "coords": [
+        11,
+        4
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_048",
+      "type": "water",
+      "coords": [
+        12,
+        4
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_049",
+      "type": "water",
+      "coords": [
+        13,
+        4
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_050",
+      "type": "shrine",
+      "coords": [
+        2,
+        5
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_051",
+      "type": "water",
+      "coords": [
+        3,
+        5
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_052",
+      "type": "water",
+      "coords": [
+        4,
+        5
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_053",
+      "type": "offering",
+      "coords": [
+        5,
+        5
+      ],
+      "colours": [
+        "pink", "blue"
+      ]
+    },
+    {
+      "id": "tile_054",
+      "type": "water",
+      "coords": [
+        6,
+        5
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_055",
+      "type": "water",
+      "coords": [
+        7,
+        5
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_056",
+      "type": "water",
+      "coords": [
+        8,
+        5
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_057",
+      "type": "water",
+      "coords": [
+        9,
+        5
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_058",
+      "type": "shrine",
+      "coords": [
+        10,
+        5
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_059",
+      "type": "water",
+      "coords": [
+        11,
+        5
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_060",
+      "type": "water",
+      "coords": [
+        12,
+        5
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_061",
+      "type": "statue_source",
+      "coords": [
+        13,
+        5
+      ],
+      "colours": [
+        "blue"
+      ]
+    },
+    {
+      "id": "tile_062",
+      "type": "water",
+      "coords": [
+        3,
+        6
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_063",
+      "type": "statue_island",
+      "coords": [
+        4,
+        6
+      ],
+      "colours": [
+        "black", "red", "pink"
+      ]
+    },
+    {
+      "id": "tile_064",
+      "type": "water",
+      "coords": [
+        5,
+        6
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_065",
+      "type": "water",
+      "coords": [
+        6,
+        6
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_066",
+      "type": "water",
+      "coords": [
+        7,
+        6
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_067",
+      "type": "water",
+      "coords": [
+        8,
+        6
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_068",
+      "type": "water",
+      "coords": [
+        10,
+        6
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_069",
+      "type": "water",
+      "coords": [
+        12,
+        6
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_070",
+      "type": "water",
+      "coords": [
+        13,
+        6
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_071",
+      "type": "statue_source",
+      "coords": [
+        2,
+        7
+      ],
+      "colours": [
+        "pink"
+      ]
+    },
+    {
+      "id": "tile_072",
+      "type": "water",
+      "coords": [
+        3,
+        7
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_073",
+      "type": "statue_island",
+      "coords": [
+        4,
+        7
+      ],
+      "colours": [
+        "yellow", "blue", "black"
+      ]
+    },
+    {
+      "id": "tile_074",
+      "type": "water",
+      "coords": [
+        5,
+        7
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_075",
+      "type": "water",
+      "coords": [
+        7,
+        7
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_076",
+      "type": "shrine",
+      "coords": [
+        8,
+        7
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_077",
+      "type": "offering",
+      "coords": [
+        9,
+        7
+      ],
+      "colours": [
+        "pink", "blue"
+      ]
+    },
+    {
+      "id": "tile_078",
+      "type": "water",
+      "coords": [
+        11,
+        7
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_079",
+      "type": "shrine",
+      "coords": [
+        12,
+        7
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_080",
+      "type": "statue_island",
+      "coords": [
+        13,
+        7
+      ],
+      "colours": [
+        "red", "yellow", "green"
+      ]
+    },
+    {
+      "id": "tile_081",
+      "type": "water",
+      "coords": [
+        3,
+        8
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_082",
+      "type": "water",
+      "coords": [
+        4,
+        8
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_083",
+      "type": "water",
+      "coords": [
+        5,
+        8
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_084",
+      "type": "shrine",
+      "coords": [
+        6,
+        8
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_085",
+      "type": "monster",
+      "coords": [
+        7,
+        8
+      ],
+      "colours": [
+        "red"
+      ]
+    },
+    {
+      "id": "tile_086",
+      "type": "water",
+      "coords": [
+        9,
+        8
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_087",
+      "type": "water",
+      "coords": [
+        10,
+        8
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_088",
+      "type": "water",
+      "coords": [
+        11,
+        8
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_089",
+      "type": "water",
+      "coords": [
+        12,
+        8
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_090",
+      "type": "water",
+      "coords": [
+        13,
+        8
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_091",
+      "type": "shrine",
+      "coords": [
+        3,
+        9
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_092",
+      "type": "water",
+      "coords": [
+        4,
+        9
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_093",
+      "type": "offering",
+      "coords": [
+        5,
+        9
+      ],
+      "colours": [
+        "black", "green"
+      ]
+    },
+    {
+      "id": "tile_094",
+      "type": "statue_island",
+      "coords": [
+        6,
+        9
+      ],
+      "colours": [
+        "red", "pink", "blue"
+      ]
+    },
+    {
+      "id": "tile_095",
+      "type": "water",
+      "coords": [
+        7,
+        9
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_096",
+      "type": "shrine",
+      "coords": [
+        8,
+        9
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_097",
+      "type": "water",
+      "coords": [
+        9,
+        9
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_098",
+      "type": "offering",
+      "coords": [
+        10,
+        9
+      ],
+      "colours": [
+        "red", "yellow"
+      ]
+    },
+    {
+      "id": "tile_099",
+      "type": "water",
+      "coords": [
+        11,
+        9
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_100",
+      "type": "offering",
+      "coords": [
+        12,
+        9
+      ],
+      "colours": [
+        "red", "yellow"
+      ]
+    },
+    {
+      "id": "tile_101",
+      "type": "monster",
+      "coords": [
+        4,
+        10
+      ],
+      "colours": [
+        "pink", "black"
+      ]
+    },
+    {
+      "id": "tile_102",
+      "type": "water",
+      "coords": [
+        5,
+        10
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_103",
+      "type": "shrine",
+      "coords": [
+        6,
+        10
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_104",
+      "type": "water",
+      "coords": [
+        7,
+        10
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_105",
+      "type": "monster",
+      "coords": [
+        9,
+        10
+      ],
+      "colours": [
+        "green"
+      ]
+    },
+    {
+      "id": "tile_106",
+      "type": "water",
+      "coords": [
+        10,
+        10
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_107",
+      "type": "water",
+      "coords": [
+        11,
+        10
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_108",
+      "type": "statue_source",
+      "coords": [
+        12,
+        10
+      ],
+      "colours": [
+        "green"
+      ]
+    },
+    {
+      "id": "tile_109",
+      "type": "water",
+      "coords": [
+        4,
+        11
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_110",
+      "type": "water",
+      "coords": [
+        5,
+        11
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_111",
+      "type": "water",
+      "coords": [
+        6,
+        11
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_112",
+      "type": "temple",
+      "coords": [
+        7,
+        11
+      ],
+      "colours": [
+        "pink"
+      ]
+    },
+    {
+      "id": "tile_113",
+      "type": "water",
+      "coords": [
+        9,
+        11
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_114",
+      "type": "water",
+      "coords": [
+        10,
+        11
+      ],
+      "colours": []
+    },
+    {
+      "id": "tile_115",
+      "type": "statue_source",
+      "coords": [
+        5,
+        12
+      ],
+      "colours": [
+        "black"
+      ]
+    },
+    {
+      "id": "tile_116",
+      "type": "monster",
+      "coords": [
+        7,
+        12
+      ],
+      "colours": [
+        "black", "red"
+      ]
+    },
+    {
+      "id": "tile_117",
+      "type": "statue_island",
+      "coords": [
+        9,
+        12
+      ],
+      "colours": [
+        "black", "blue", "green"
+      ]
+    },
+    {
+      "id": "tile_118",
+      "type": "water",
+      "coords": [
+        10,
+        12
+      ],
+      "colours": []
+    }
+  ],
+  "infer_neighbors": true
+}
