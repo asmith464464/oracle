@@ -94,6 +94,12 @@ class HexGridVisualizer:
             plt.show(block=True)
             plt.close(fig)
 
+    def visualize_grid_only(self) -> None:
+        """Display just the base map without any route or validation."""
+        fig, _ = self._render_base(highlight_colours=None)
+        plt.show(block=True)
+        plt.close(fig)
+
     def plot_map(
         self,
         highlight_colours: Iterable[str] | None = None,

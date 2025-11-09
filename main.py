@@ -62,6 +62,8 @@ def main():
     # Output options
     parser.add_argument('--visualize', action='store_true',
                        help='Show visualization windows')
+    parser.add_argument('--view-only', action='store_true',
+                       help='View map without running solver or validation (requires --map)')
     parser.add_argument('--save-results', type=str,
                        help='Save results to JSON file')
     parser.add_argument('--save-map', type=str,
@@ -102,6 +104,16 @@ def main():
         if args.save_map:
             grid.to_json(args.save_map)
             logger.info(f"Saved map to {args.save_map}")
+        
+        # View-only mode: just visualize and exit
+        if args.view_only:
+            if not args.map:
+                logger.error("--view-only requires --map argument")
+                return 1
+            logger.info("View-only mode: displaying map without validation")
+            visualizer = HexGridVisualizer(grid)
+            visualizer.visualize_grid_only()
+            return 0
         
         # Validate grid
         issues = grid.validate_grid()
