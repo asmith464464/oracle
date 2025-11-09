@@ -1,0 +1,286 @@
+"""
+Graph representation, node classes, and adjacency handling for hex-grid maps.
+"""
+
+from typing import Dict, List, Optional, Tuple, Set
+from dataclasses import dataclass, field
+from enum import Enum
+import json
+
+
+class TileType(Enum):
+    """Enumeration of tile types on the hex grid."""
+    WATER = "water"
+    MONSTER = "monster"
+    OFFERING = "offering"
+    STATUE_SOURCE = "statue_source"
+    STATUE_ISLAND = "statue_island"
+    TEMPLE = "temple"
+    SHRINE = "shrine"
+
+
+@dataclass
+class Tile:
+    """Represents a single tile on the hex grid."""
+    id: str
+    tile_type: TileType
+    coords: Tuple[int, int]
+    neighbors: List[str]
+    colours: Tuple[str, ...] = field(default_factory=tuple)
+
+    def is_water(self) -> bool:
+        """Check if this tile is water (traversable)."""
+        return self.tile_type == TileType.WATER
+
+    def is_task_tile(self) -> bool:
+        """Check if this tile is a task tile (land)."""
+        return self.tile_type != TileType.WATER
+
+    def to_dict(self, include_neighbors: bool = True) -> Dict:
+        """Convert tile to dictionary for JSON serialization."""
+        data = {
+            'id': self.id,
+            'type': self.tile_type.value,
+            'colours': list(self.colours),
+            'coords': self.coords,
+        }
+        if include_neighbors:
+            data['neighbors'] = self.neighbors
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'Tile':
+        """Create tile from dictionary."""
+        return cls(
+            id=data['id'],
+            tile_type=TileType(data['type']),
+            colours=tuple(data.get('colours', [])),
+            coords=tuple(data['coords']),
+            neighbors=data.get('neighbors', [])
+        )
+
+
+class HexGrid:
+    """Represents the hex-grid map with tiles and pathfinding capabilities."""
+    
+    def __init__(self):
+        self.tiles: Dict[str, Tile] = {}
+        self.zeus_tile_id: str = ""  # Starting/ending position
+        
+    def add_tile(self, tile: Tile) -> None:
+        """Add a tile to the grid."""
+        self.tiles[tile.id] = tile
+        
+    def get_tile(self, tile_id: str) -> Optional[Tile]:
+        """Get a tile by ID."""
+        return self.tiles.get(tile_id)
+        
+    def get_water_tiles(self) -> List[Tile]:
+        """Get all water tiles (traversable)."""
+        return [tile for tile in self.tiles.values() if tile.is_water()]
+        
+    def get_task_tiles(self) -> List[Tile]:
+        """Get all task tiles (land)."""
+        return [tile for tile in self.tiles.values() if tile.is_task_tile()]
+        
+    def get_tiles_by_type(self, tile_type: TileType) -> List[Tile]:
+        """Get all tiles of a specific type."""
+        return [tile for tile in self.tiles.values() if tile.tile_type == tile_type]
+        
+    def get_tiles_by_colour(self, colour: str) -> List[Tile]:
+        """Get all tiles of a specific colour."""
+        return [tile for tile in self.tiles.values() if colour in tile.colours]
+        
+    def get_neighbors(self, tile_id: str) -> List[Tile]:
+        """Get neighboring tiles of a given tile."""
+        tile = self.get_tile(tile_id)
+        if not tile:
+            return []
+        return [self.tiles[neighbor_id] for neighbor_id in tile.neighbors if neighbor_id in self.tiles]
+        
+    def get_adjacent_water_tiles(self, tile_id: str) -> List[Tile]:
+        """Get water tiles adjacent to a given tile."""
+        neighbors = self.get_neighbors(tile_id)
+        return [tile for tile in neighbors if tile.is_water()]
+        
+    def set_zeus_tile(self, tile_id: str) -> None:
+        """Set the starting/ending tile (Zeus)."""
+        if tile_id in self.tiles:
+            self.zeus_tile_id = tile_id
+        else:
+            raise ValueError(f"Tile {tile_id} not found in grid")
+            
+    def get_zeus_tile(self) -> Optional[Tile]:
+        """Get the Zeus tile (starting/ending position)."""
+        return self.get_tile(self.zeus_tile_id)
+        
+    def validate_grid(self) -> List[str]:
+        """Validate the grid structure and return list of issues."""
+        issues = []
+        
+        # Check if Zeus tile is set
+        if not self.zeus_tile_id:
+            issues.append("Zeus tile not set")
+        elif self.zeus_tile_id not in self.tiles:
+            issues.append(f"Zeus tile {self.zeus_tile_id} not found in grid")
+            
+        # Check neighbor references
+        for tile_id, tile in self.tiles.items():
+            for neighbor_id in tile.neighbors:
+                if neighbor_id not in self.tiles:
+                    issues.append(f"Tile {tile_id} references non-existent neighbor {neighbor_id}")
+                    
+        # Check that all water tiles are connected
+        water_tiles = {tile.id for tile in self.get_water_tiles()}
+        if water_tiles:
+            connected = set()
+            stack = [next(iter(water_tiles))]
+            
+            while stack:
+                current_id = stack.pop()
+                if current_id in connected:
+                    continue
+                connected.add(current_id)
+                
+                current_tile = self.get_tile(current_id)
+                if current_tile:
+                    for neighbor_id in current_tile.neighbors:
+                        if neighbor_id in water_tiles and neighbor_id not in connected:
+                            stack.append(neighbor_id)
+                            
+            if len(connected) != len(water_tiles):
+                issues.append("Not all water tiles are connected")
+
+        per_colour_requirements = {
+            TileType.MONSTER: 2,
+            TileType.OFFERING: 2,
+            TileType.STATUE_SOURCE: 1,
+            TileType.STATUE_ISLAND: 3,
+            TileType.TEMPLE: 1,
+        }
+
+        available_colours = sorted(self.get_available_colours())
+        colour_counts: Dict[str, Dict[TileType, int]] = {
+            colour: {tile_type: 0 for tile_type in per_colour_requirements}
+            for colour in available_colours
+        }
+
+        for tile in self.tiles.values():
+            if tile.tile_type not in per_colour_requirements:
+                continue
+            for colour in tile.colours:
+                if colour not in colour_counts:
+                    colour_counts[colour] = {
+                        tile_type: 0 for tile_type in per_colour_requirements
+                    }
+                colour_counts[colour][tile.tile_type] += 1
+
+        for colour, counts in colour_counts.items():
+            for tile_type, required in per_colour_requirements.items():
+                if counts.get(tile_type, 0) < required:
+                    issues.append(
+                        f"Colour '{colour}' has {counts.get(tile_type, 0)} "
+                        f"{tile_type.value.replace('_', ' ')} tiles; {required} required"
+                    )
+                
+        return issues
+        
+    def to_json(self, filepath: str, include_neighbors: bool = True) -> None:
+        """Save grid to JSON file."""
+        data = {
+            'zeus_tile': self.zeus_tile_id,
+            'tiles': [tile.to_dict(include_neighbors=include_neighbors) for tile in self.tiles.values()]
+        }
+        if not include_neighbors:
+            data['infer_neighbors'] = True
+        with open(filepath, 'w') as f:
+            json.dump(data, f, indent=2)
+            
+    @classmethod
+    def from_json(cls, filepath: str) -> 'HexGrid':
+        """Load grid from JSON file."""
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+            
+        grid = cls()
+        tile_entries = data.get('tiles', [])
+        infer_neighbors = data.get('infer_neighbors', False)
+        neighbors_missing = any('neighbors' not in tile_data for tile_data in tile_entries)
+
+        for tile_data in tile_entries:
+            tile = Tile.from_dict(tile_data)
+            grid.add_tile(tile)
+        
+        if infer_neighbors or neighbors_missing:
+            grid.recompute_neighbors_from_coords()
+
+        # Set Zeus tile
+        if 'zeus_tile' in data:
+            grid.set_zeus_tile(data['zeus_tile'])
+
+        grid.ensure_task_accessibility()
+            
+        return grid
+        
+    def get_available_colours(self) -> Set[str]:
+        """Get all colours present in the grid."""
+        colours = set()
+        for tile in self.tiles.values():
+            for colour in tile.colours:
+                colours.add(colour)
+        return colours
+
+    def ensure_task_accessibility(self) -> None:
+        """Ensure every task tile has at least one adjacent water tile."""
+        task_tiles = list(self.get_task_tiles())
+
+        for tile in task_tiles:
+            neighbors = self.get_neighbors(tile.id)
+            if any(neighbor.is_water() for neighbor in neighbors):
+                continue
+
+            converted = False
+            for neighbor in neighbors:
+                if neighbor.tile_type != TileType.WATER:
+                    neighbor.tile_type = TileType.WATER
+                    neighbor.colours = tuple()
+                    converted = True
+                    break
+
+            if converted:
+                continue
+
+            if tile.id == self.zeus_tile_id and neighbors:
+                continue
+
+            tile.tile_type = TileType.WATER
+            tile.colours = tuple()
+
+    def recompute_neighbors_from_coords(self) -> None:
+        """Rebuild neighbor lists based solely on stored coordinates."""
+        coord_to_id = {
+            tuple(tile.coords): tile_id
+            for tile_id, tile in self.tiles.items()
+        }
+
+        even_row_offsets = [(-1, 0), (1, 0), (-1, -1), (0, -1), (-1, 1), (0, 1)]
+        odd_row_offsets = [(-1, 0), (1, 0), (0, -1), (1, -1), (0, 1), (1, 1)]
+
+        for tile in self.tiles.values():
+            col, row = tile.coords
+            offsets = even_row_offsets if row % 2 == 0 else odd_row_offsets
+            neighbors: List[str] = []
+
+            for dx, dy in offsets:
+                neighbor_coords = (col + dx, row + dy)
+                neighbor_id = coord_to_id.get(neighbor_coords)
+                if neighbor_id:
+                    neighbors.append(neighbor_id)
+
+            tile.neighbors = sorted(neighbors)
+        
+    def __str__(self) -> str:
+        """String representation of the grid."""
+        water_count = len(self.get_water_tiles())
+        task_count = len(self.get_task_tiles())
+        return f"HexGrid: {len(self.tiles)} tiles ({water_count} water, {task_count} tasks)"

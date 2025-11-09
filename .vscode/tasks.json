@@ -1,0 +1,49 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Oracle Heuristic Route Planner",
+			"type": "shell",
+			"command": "C:/Users/alist/Documents/oracle/.venv/Scripts/python.exe",
+			"args": [
+				"main.py",
+				"--generate-map",
+				"--visualize"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Run Tests",
+			"type": "shell",
+			"command": "C:/Users/alist/Documents/oracle/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/",
+				"-v"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Oracle with Specific Colors",
+			"type": "shell",
+			"command": "C:/Users/alist/Documents/oracle/.venv/Scripts/python.exe",
+			"args": [
+				"main.py",
+				"--colours",
+				"red",
+				"blue",
+				"green",
+				"--seed",
+				"42"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}
