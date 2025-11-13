@@ -256,7 +256,7 @@ class CycleHeuristic:
         }
 
     def get_cycle_summary(self) -> List[Dict]:
-        """Expose cycle metadata in a structure compatible with visualizers."""
+        """Expose cycle metadata in a structure compatible with visualisers."""
         summary: List[Dict] = []
 
         for idx, cycle in enumerate(self.cycles):

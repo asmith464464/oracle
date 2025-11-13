@@ -1,4 +1,4 @@
-"""Model definitions used by the shrine optimizer."""
+"""Model definitions used by the shrine optimiser."""
 
 from __future__ import annotations
 

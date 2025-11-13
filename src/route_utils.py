@@ -41,7 +41,7 @@ def repair_route(grid: HexGrid, distance_calc: DistanceCalculator, route: List[s
 
         # Check if tiles are adjacent
         current_tile_obj = grid.get_tile(current_tile)
-        if current_tile_obj and next_tile in current_tile_obj.neighbors:
+        if current_tile_obj and next_tile in current_tile_obj.neighbours:
             repaired.append(next_tile)
             continue
 

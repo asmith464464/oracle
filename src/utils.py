@@ -52,7 +52,7 @@ def generate_random_colours(num_colours: int = 3,
     return random.sample(available_colours, num_colours)
 
 
-def _build_lattice_neighbors(points: np.ndarray) -> List[List[int]]:
+def _build_lattice_neighbours(points: np.ndarray) -> List[List[int]]:
     """Create adjacency lists for each lattice point based on geometric proximity."""
     total = len(points)
     if total == 0:
@@ -65,8 +65,8 @@ def _build_lattice_neighbors(points: np.ndarray) -> List[List[int]]:
     if finite_distances.size == 0:
         return [[] for _ in range(total)]
 
-    neighbor_threshold = float(finite_distances.min()) * 1.05
-    return [np.where(row <= neighbor_threshold)[0].tolist() for row in distances]
+    neighbour_threshold = float(finite_distances.min()) * 1.05
+    return [np.where(row <= neighbour_threshold)[0].tolist() for row in distances]
 
 
 
@@ -86,7 +86,7 @@ def create_example_map(
     lattice_points, _ = hexalattice.create_hex_grid(
         nx=width, ny=height, do_plot=False, align_to_origin=True
     )
-    neighbor_lookup = _build_lattice_neighbors(np.asarray(lattice_points, dtype=float))
+    neighbour_lookup = _build_lattice_neighbours(np.asarray(lattice_points, dtype=float))
 
     total_tiles = width * height
     tile_ids = [f"tile_{i:03d}" for i in range(total_tiles)]
@@ -154,7 +154,7 @@ def create_example_map(
                 id=tile_ids[tile_idx],
                 tile_type=tile_type,
                 coords=tile_coords[tile_idx],
-                neighbors=[tile_ids[n] for n in neighbor_lookup[tile_idx]],
+                neighbours=[tile_ids[n] for n in neighbour_lookup[tile_idx]],
                 colours=colours
             ))
         
@@ -166,7 +166,7 @@ def create_example_map(
                     id=tile_ids[idx],
                     tile_type=TileType.WATER,
                     coords=tile_coords[idx],
-                    neighbors=[tile_ids[n] for n in neighbor_lookup[idx]],
+                    neighbours=[tile_ids[n] for n in neighbour_lookup[idx]],
                     colours=()
                 ))
         

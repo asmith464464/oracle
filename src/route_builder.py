@@ -1,5 +1,5 @@
 """
-Route building through cycles using greedy nearest-neighbor strategy.
+Route building through cycles using greedy nearest-neighbour strategy.
 """
 
 from typing import Dict, List, Optional
@@ -19,7 +19,7 @@ class RouteBuilder:
     
     def visit_tasks_greedily(self, tasks: List[Task], start_tile: str) -> List[str]:
         """
-        Visit all tasks in greedy order (nearest neighbor).
+        Visit all tasks in greedy order (nearest neighbour).
         
         Args:
             tasks: Tasks to visit
@@ -80,10 +80,10 @@ class RouteBuilder:
             return []
         
         water_ids = []
-        for neighbor_id in tile.neighbors:
-            neighbor_tile = self.grid.get_tile(neighbor_id)
-            if neighbor_tile and neighbor_tile.is_water():
-                water_ids.append(neighbor_id)
+        for neighbour_id in tile.neighbours:
+            neighbour_tile = self.grid.get_tile(neighbour_id)
+            if neighbour_tile and neighbour_tile.is_water():
+                water_ids.append(neighbour_id)
         
         water_ids.sort()
         return water_ids

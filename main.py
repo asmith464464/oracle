@@ -3,7 +3,7 @@ Oracle Heuristic Route Planner - Main Entry Point
 
 This module serves as the main entry point for the Oracle Heuristic Route Planner.
 It loads/generates maps, assigns colours, runs the heuristic, simulates routes,
-and optionally displays visualizations.
+and optionally displays visualisations.
 """
 
 import argparse
@@ -16,8 +16,8 @@ from src.map_model import HexGrid
 from src.tasks import TaskManager
 from src.heuristic import CycleHeuristic
 from src.simulator import RouteSimulator
-from src.shrine_optimizer import ShrineOptimizer
-from src.visualizer import HexGridVisualizer
+from shrine_optimiser import ShrineOptimiser
+from visualiser import HexGridVisualiser
 from src.utils import (
     setup_logging, generate_random_colours, create_example_map,
     load_map_from_json, format_route_summary, calculate_efficiency_metrics,
@@ -60,7 +60,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
     
     # Output options
     parser.add_argument('--visualize', action='store_true',
-                       help='Show visualization windows')
+                       help='Show visualisation windows')
     parser.add_argument('--view-only', action='store_true',
                        help='View map without running solver or validation (requires --map)')
     parser.add_argument('--save-results', type=str,
@@ -109,14 +109,14 @@ def main():
             grid.to_json(args.save_map)
             logger.info(f"Saved map to {args.save_map}")
         
-        # View-only mode: just visualize and exit
+        # View-only mode: just visualise and exit
         if args.view_only:
             if not args.map:
                 logger.error("--view-only requires --map argument")
                 return 1
             logger.info("View-only mode: displaying map without validation")
-            visualizer = HexGridVisualizer(grid)
-            visualizer.visualize_grid_only()
+            visualiser = HexGridVisualiser(grid)
+            visualiser.visualise_grid_only()
             return 0
         
         # Validate grid
@@ -197,19 +197,19 @@ def main():
         logger.info(f"Generated route with {len(route)} positions")
         logger.info(f"Statistics: {stats}")
         
-        # Optimize shrine placement
-        logger.info("Optimizing shrine placement...")
-        shrine_optimizer = ShrineOptimizer(grid, task_manager)
-        optimized_route, shrine_positions = shrine_optimizer.optimize_shrine_placement(
+        # Optimise shrine placement
+        logger.info("Optimising shrine placement...")
+        shrine_optimiser = ShrineOptimiser(grid, task_manager)
+        optimised_route, shrine_positions = shrine_optimiser.optimise_shrine_placement(
             route, args.max_shrines
         )
         
-        logger.info(f"Optimized route with {len(shrine_positions)} shrines")
+        logger.info(f"Optimised route with {len(shrine_positions)} shrines")
         
         # Simulate route execution
         logger.info("Simulating route execution...")
         simulator = RouteSimulator(grid, task_manager)
-        simulation_result = simulator.simulate_route(optimized_route, shrine_positions)
+        simulation_result = simulator.simulate_route(optimised_route, shrine_positions)
         
         if simulation_result.success:
             logger.info("Route simulation successful!")
@@ -230,7 +230,7 @@ def main():
         print("="*50)
         
         summary = format_route_summary(
-            optimized_route,
+            optimised_route,
             simulation_result.total_moves,
             simulation_result.total_turns,
             simulation_result.completed_tasks,
@@ -264,10 +264,10 @@ def main():
                 'seed': args.seed
             },
             'route': {
-                'path': optimized_route,
+                'path': optimised_route,
                 'total_moves': simulation_result.total_moves,
                 'total_turns': simulation_result.total_turns,
-                'length': len(optimized_route)
+                'length': len(optimised_route)
             },
             'tasks': {
                 'completed': simulation_result.completed_tasks,
@@ -291,13 +291,13 @@ def main():
             export_results_to_json(results, args.save_results)
             logger.info(f"Results saved to {args.save_results}")
         
-        # Show visualizations if requested
+        # Show visualisations if requested
         if args.visualize:
-            logger.info("Displaying visualizations...")
+            logger.info("Displaying visualisations...")
             try:
-                visualizer = HexGridVisualizer(grid)
-                visualizer.show_all_visualizations(
-                    optimized_route,
+                visualiser = HexGridVisualiser(grid)
+                visualiser.show_all_visualisations(
+                    optimised_route,
                     heuristic.cycles,
                     {**stats, 'efficiency_metrics': efficiency_metrics},
                     completed_task_tiles,
@@ -306,8 +306,8 @@ def main():
                     colours
                 )
             except Exception as e:
-                logger.warning(f"Visualization failed: {e}")
-                print("Note: Visualization requires matplotlib and may not work in all environments")
+                logger.warning(f"Visualisation failed: {e}")
+                print("Note: Visualisation requires matplotlib and may not work in all environments")
         
         print(f"\nRun completed successfully! (ID: {results['run_id']})")
         return 0

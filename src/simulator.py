@@ -87,7 +87,7 @@ class RouteSimulator:
             )
             
         # Validate adjacency
-        if to_tile_id not in from_tile.neighbors:
+        if to_tile_id not in from_tile.neighbours:
             return SimulationStep(
                 step_number=step_number,
                 current_tile_id=from_tile_id,
@@ -132,17 +132,17 @@ class RouteSimulator:
             return
             
         # Check adjacent tiles for tasks
-        for neighbor_id in current_tile.neighbors:
-            neighbor_tile = self.grid.get_tile(neighbor_id)
-            if not neighbor_tile or neighbor_tile.is_water():
+        for neighbour_id in current_tile.neighbours:
+            neighbour_tile = self.grid.get_tile(neighbour_id)
+            if not neighbour_tile or neighbour_tile.is_water():
                 continue
 
-            for task in self.task_manager.get_tasks_for_tile(neighbor_id):
+            for task in self.task_manager.get_tasks_for_tile(neighbour_id):
                 if (task.status == TaskStatus.PENDING and 
                     task.can_execute(player_state.completed_task_ids) and
                     self.task_manager.execute_task(task, player_state)):
                     step.action_type = 'task'
-                    step.action_target = f"{task.task_type.value}@{neighbor_id}"
+                    step.action_target = f"{task.task_type.value}@{neighbour_id}"
                     # Continue checking for more tasks - don't return early
                         
     def _check_and_build_shrines(self, current_tile_id: str,
@@ -155,17 +155,17 @@ class RouteSimulator:
             return
             
         # Check adjacent tiles for shrine building opportunities
-        for neighbor_id in current_tile.neighbors:
-            neighbor_tile = self.grid.get_tile(neighbor_id)
-            if (neighbor_tile and 
-                neighbor_tile.tile_type == TileType.SHRINE and 
-                neighbor_id in shrine_positions and
-                neighbor_id not in player_state.shrines_built):
+        for neighbour_id in current_tile.neighbours:
+            neighbour_tile = self.grid.get_tile(neighbour_id)
+            if (neighbour_tile and 
+                neighbour_tile.tile_type == TileType.SHRINE and 
+                neighbour_id in shrine_positions and
+                neighbour_id not in player_state.shrines_built):
                 
-                player_state.build_shrine(neighbor_id)
-                self.task_manager.mark_shrine_built(neighbor_id)
+                player_state.build_shrine(neighbour_id)
+                self.task_manager.mark_shrine_built(neighbour_id)
                 step.action_type = 'shrine'
-                step.action_target = f"shrine@{neighbor_id}"
+                step.action_target = f"shrine@{neighbour_id}"
                 # Continue checking for more shrines - don't return early
 
     def _validate_final_state(self, player_state: PlayerState, 
@@ -229,7 +229,7 @@ class RouteSimulator:
                 continue
                 
             # Check if both tiles are water (traversable)
-            if to_tile_id not in from_tile.neighbors:
+            if to_tile_id not in from_tile.neighbours:
                 errors.append(f"Move {i}: {from_tile_id}->{to_tile_id} not adjacent")
                 continue
 

@@ -30,10 +30,10 @@ class DistanceCalculator:
         for tile in self.grid.tiles.values():
             if not tile.is_water():
                 continue
-            for neighbor_id in tile.neighbors:
-                neighbor_tile = self.grid.get_tile(neighbor_id)
-                if neighbor_tile and neighbor_tile.is_water():
-                    graph.add_edge(tile.id, neighbor_id, weight=1)
+            for neighbour_id in tile.neighbours:
+                neighbour_tile = self.grid.get_tile(neighbour_id)
+                if neighbour_tile and neighbour_tile.is_water():
+                    graph.add_edge(tile.id, neighbour_id, weight=1)
         
         return graph
         
@@ -90,10 +90,10 @@ class DistanceCalculator:
             return []
             
         adjacent_water = []
-        for neighbor_id in task_tile.neighbors:
-            neighbor_tile = self.grid.get_tile(neighbor_id)
-            if neighbor_tile and neighbor_tile.is_water():
-                adjacent_water.append((neighbor_id, 0))  # Distance 0 since we're adjacent
+        for neighbour_id in task_tile.neighbours:
+            neighbour_tile = self.grid.get_tile(neighbour_id)
+            if neighbour_tile and neighbour_tile.is_water():
+                adjacent_water.append((neighbour_id, 0))  # Distance 0 since we're adjacent
                 
         return adjacent_water
         

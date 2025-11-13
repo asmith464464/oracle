@@ -259,7 +259,7 @@ class TaskManager:
         # Check if player is adjacent to task tile
         task_tile = self.grid.get_tile(task.tile_id)
         current_tile = self.grid.get_tile(player_state.current_tile_id)
-        if not task_tile or not current_tile or task.tile_id not in current_tile.neighbors:
+        if not task_tile or not current_tile or task.tile_id not in current_tile.neighbours:
             return False
             
         # Check specific task requirements

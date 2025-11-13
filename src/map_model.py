@@ -25,14 +25,14 @@ class Tile:
     id: str
     tile_type: TileType
     coords: Tuple[int, int]
-    neighbors: List[str]
+    neighbours: List[str]
     colours: Tuple[str, ...] = field(default_factory=tuple)
 
     def is_water(self) -> bool:
         """Check if this tile is water (traversable)."""
         return self.tile_type == TileType.WATER
 
-    def to_dict(self, include_neighbors: bool = True) -> Dict:
+    def to_dict(self, include_neighbours: bool = True) -> Dict:
         """Convert tile to dictionary for JSON serialization."""
         data = {
             'id': self.id,
@@ -40,8 +40,8 @@ class Tile:
             'colours': list(self.colours),
             'coords': self.coords,
         }
-        if include_neighbors:
-            data['neighbors'] = self.neighbors
+        if include_neighbours:
+            data['neighbours'] = self.neighbours
         return data
 
     @classmethod
@@ -52,7 +52,7 @@ class Tile:
             tile_type=TileType(data['type']),
             colours=tuple(data.get('colours', [])),
             coords=tuple(data['coords']),
-            neighbors=data.get('neighbors', [])
+            neighbours=data.get('neighbours', [])
         )
 
 
@@ -87,17 +87,17 @@ class HexGrid:
         """Get all tiles of a specific colour."""
         return [tile for tile in self.tiles.values() if colour in tile.colours]
         
-    def get_neighbors(self, tile_id: str) -> List[Tile]:
-        """Get neighboring tiles of a given tile."""
+    def get_neighbours(self, tile_id: str) -> List[Tile]:
+        """Get neighbouring tiles of a given tile."""
         tile = self.get_tile(tile_id)
         if not tile:
             return []
-        return [self.tiles[neighbor_id] for neighbor_id in tile.neighbors if neighbor_id in self.tiles]
+        return [self.tiles[neighbour_id] for neighbour_id in tile.neighbours if neighbour_id in self.tiles]
         
     def get_adjacent_water_tiles(self, tile_id: str) -> List[Tile]:
         """Get water tiles adjacent to a given tile."""
-        neighbors = self.get_neighbors(tile_id)
-        return [tile for tile in neighbors if tile.is_water()]
+        neighbours = self.get_neighbours(tile_id)
+        return [tile for tile in neighbours if tile.is_water()]
         
     def set_zeus_tile(self, tile_id: str) -> None:
         """Set the starting/ending tile (Zeus)."""
@@ -120,11 +120,11 @@ class HexGrid:
         elif self.zeus_tile_id not in self.tiles:
             issues.append(f"Zeus tile {self.zeus_tile_id} not found in grid")
             
-        # Check neighbor references
+        # Check neighbour references
         for tile_id, tile in self.tiles.items():
-            for neighbor_id in tile.neighbors:
-                if neighbor_id not in self.tiles:
-                    issues.append(f"Tile {tile_id} references non-existent neighbor {neighbor_id}")
+            for neighbour_id in tile.neighbours:
+                if neighbour_id not in self.tiles:
+                    issues.append(f"Tile {tile_id} references non-existent neighbour {neighbour_id}")
                     
         # Check that all water tiles are connected
         water_tiles = {tile.id for tile in self.get_water_tiles()}
@@ -136,10 +136,10 @@ class HexGrid:
                 current_id = stack.pop()
                 current_tile = self.get_tile(current_id)
                 if current_tile:
-                    for neighbor_id in current_tile.neighbors:
-                        if neighbor_id in water_tiles and neighbor_id not in connected:
-                            connected.add(neighbor_id)
-                            stack.append(neighbor_id)
+                    for neighbour_id in current_tile.neighbours:
+                        if neighbour_id in water_tiles and neighbour_id not in connected:
+                            connected.add(neighbour_id)
+                            stack.append(neighbour_id)
                             
             if len(connected) != len(water_tiles):
                 issues.append("Not all water tiles are connected")
@@ -178,14 +178,14 @@ class HexGrid:
                 
         return issues
         
-    def to_json(self, filepath: str, include_neighbors: bool = True) -> None:
+    def to_json(self, filepath: str, include_neighbours: bool = True) -> None:
         """Save grid to JSON file."""
         data = {
             'zeus_tile': self.zeus_tile_id,
-            'tiles': [tile.to_dict(include_neighbors=include_neighbors) for tile in self.tiles.values()]
+            'tiles': [tile.to_dict(include_neighbours=include_neighbours) for tile in self.tiles.values()]
         }
-        if not include_neighbors:
-            data['infer_neighbors'] = True
+        if not include_neighbours:
+            data['infer_neighbours'] = True
         with open(filepath, 'w') as f:
             json.dump(data, f, indent=2)
             
@@ -197,15 +197,15 @@ class HexGrid:
             
         grid = cls()
         tile_entries = data.get('tiles', [])
-        infer_neighbors = data.get('infer_neighbors', False)
-        neighbors_missing = any('neighbors' not in tile_data for tile_data in tile_entries)
+        infer_neighbours = data.get('infer_neighbours', False)
+        neighbours_missing = any('neighbours' not in tile_data for tile_data in tile_entries)
 
         for tile_data in tile_entries:
             tile = Tile.from_dict(tile_data)
             grid.add_tile(tile)
         
-        if infer_neighbors or neighbors_missing:
-            grid.recompute_neighbors_from_coords()
+        if infer_neighbours or neighbours_missing:
+            grid.recompute_neighbours_from_coords()
 
         # Set Zeus tile
         if 'zeus_tile' in data:
@@ -228,29 +228,29 @@ class HexGrid:
         task_tiles = list(self.get_task_tiles())
 
         for tile in task_tiles:
-            neighbors = self.get_neighbors(tile.id)
-            if any(neighbor.is_water() for neighbor in neighbors):
+            neighbours = self.get_neighbours(tile.id)
+            if any(neighbour.is_water() for neighbour in neighbours):
                 continue
 
             converted = False
-            for neighbor in neighbors:
-                if neighbor.tile_type != TileType.WATER:
-                    neighbor.tile_type = TileType.WATER
-                    neighbor.colours = tuple()
+            for neighbour in neighbours:
+                if neighbour.tile_type != TileType.WATER:
+                    neighbour.tile_type = TileType.WATER
+                    neighbour.colours = tuple()
                     converted = True
                     break
 
             if converted:
                 continue
 
-            if tile.id == self.zeus_tile_id and neighbors:
+            if tile.id == self.zeus_tile_id and neighbours:
                 continue
 
             tile.tile_type = TileType.WATER
             tile.colours = tuple()
 
-    def recompute_neighbors_from_coords(self) -> None:
-        """Rebuild neighbor lists based solely on stored coordinates."""
+    def recompute_neighbours_from_coords(self) -> None:
+        """Rebuild neighbour lists based solely on stored coordinates."""
         coord_to_id = {tuple(tile.coords): tile_id for tile_id, tile in self.tiles.items()}
         even_row_offsets = [(-1, 0), (1, 0), (-1, -1), (0, -1), (-1, 1), (0, 1)]
         odd_row_offsets = [(-1, 0), (1, 0), (0, -1), (1, -1), (0, 1), (1, 1)]
@@ -258,9 +258,9 @@ class HexGrid:
         for tile in self.tiles.values():
             col, row = tile.coords
             offsets = even_row_offsets if row % 2 == 0 else odd_row_offsets
-            tile.neighbors = sorted([
-                neighbor_id for dx, dy in offsets
-                if (neighbor_id := coord_to_id.get((col + dx, row + dy)))
+            tile.neighbours = sorted([
+                neighbour_id for dx, dy in offsets
+                if (neighbour_id := coord_to_id.get((col + dx, row + dy)))
             ])
         
     def __str__(self) -> str:

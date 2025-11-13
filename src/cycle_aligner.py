@@ -71,7 +71,7 @@ class CycleAligner:
                 return idx
             
             tile = self.grid.get_tile(tile_id)
-            if tile and any(task_id in tile.neighbors for task_id in task_ids):
+            if tile and any(task_id in tile.neighbours for task_id in task_ids):
                 return idx
         
         return None
