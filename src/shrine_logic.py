@@ -17,13 +17,18 @@ def find_shrine_opportunities(
 ) -> List[ShrineOpportunity]:
     """Locate shrine builds that fit inside existing wasted moves."""
     opportunities: List[ShrineOpportunity] = []
-    shortest = distance_calc.get_shortest_distance
+    
+    # Pre-compute water access for each shrine once
+    shrine_water_access = {
+        shrine.id: distance_calc.find_nearest_water_tiles(shrine.id)
+        for shrine in shrine_candidates
+    }
 
     for index in range(len(route) - 1):
         current_pos = route[index]
         next_pos = route[index + 1]
 
-        moves_to_next = shortest(current_pos, next_pos)
+        moves_to_next = distance_calc.get_shortest_distance(current_pos, next_pos)
         if moves_to_next is None:
             continue
 
@@ -34,25 +39,22 @@ def find_shrine_opportunities(
 
         wasted_moves = remaining_moves - moves_to_next
         for shrine_tile in shrine_candidates:
-            shrine_water = distance_calc.find_nearest_water_tiles(shrine_tile.id)
-            for water_pos, _ in shrine_water:
-                to_shrine = shortest(current_pos, water_pos)
-                from_shrine = shortest(water_pos, next_pos)
+            for water_pos, _ in shrine_water_access[shrine_tile.id]:
+                to_shrine = distance_calc.get_shortest_distance(current_pos, water_pos)
+                from_shrine = distance_calc.get_shortest_distance(water_pos, next_pos)
                 if to_shrine is None or from_shrine is None:
                     continue
 
                 total_detour = to_shrine + from_shrine - moves_to_next
-                if total_detour > wasted_moves:
-                    continue
-
-                opportunities.append(
-                    ShrineOpportunity(
-                        shrine_tile_id=shrine_tile.id,
-                        route_position=index,
-                        detour_cost=max(0, total_detour),
-                        wasted_moves_used=min(wasted_moves, to_shrine + from_shrine),
+                if total_detour <= wasted_moves:
+                    opportunities.append(
+                        ShrineOpportunity(
+                            shrine_tile_id=shrine_tile.id,
+                            route_position=index,
+                            detour_cost=max(0, total_detour),
+                            wasted_moves_used=min(wasted_moves, to_shrine + from_shrine),
+                        )
                     )
-                )
 
     return opportunities
 
@@ -142,24 +144,24 @@ def add_remaining_shrines(
     if not available:
         return list(route), []
 
-    shortest = distance_calc.get_shortest_distance
     end_position = route[-1]
-    ranked: List[Tuple[str, float, str]] = []
-
-    for shrine_tile in available:
-        shrine_water = distance_calc.find_nearest_water_tiles(shrine_tile.id)
-        best_distance = float("inf")
-        best_water = None
-
-        for water_pos, _ in shrine_water:
-            distance = shortest(end_position, water_pos)
-            if distance is not None and distance < best_distance:
-                best_distance = distance
-                best_water = water_pos
-
-        if best_water is not None:
-            ranked.append((shrine_tile.id, best_distance, best_water))
-
+    
+    # Rank shrines by distance to end position
+    ranked = [
+        (shrine.id, min(
+            (distance_calc.get_shortest_distance(end_position, water_pos) or float("inf"))
+            for water_pos, _ in distance_calc.find_nearest_water_tiles(shrine.id)
+        ), min(
+            distance_calc.find_nearest_water_tiles(shrine.id),
+            key=lambda x: distance_calc.get_shortest_distance(end_position, x[0]) or float("inf"),
+            default=(None, None)
+        )[0])
+        for shrine in available
+    ]
+    
+    # Filter out shrines with no valid water access
+    ranked = [(shrine_id, dist, water_pos) for shrine_id, dist, water_pos in ranked 
+             if water_pos is not None and dist != float("inf")]
     ranked.sort(key=lambda item: item[1])
 
     extended_route = list(route)
@@ -167,11 +169,8 @@ def add_remaining_shrines(
 
     for shrine_id, _, water_pos in ranked[:remaining_count]:
         to_shrine = distance_calc.get_shortest_path(extended_route[-1], water_pos)
-        if not to_shrine:
-            continue
+        if to_shrine:
+            append_path(extended_route, to_shrine)
+            added.append(shrine_id)
 
-        append_path(extended_route, to_shrine)
-        added.append(shrine_id)
-
-    repaired_route = repair_route(grid, distance_calc, extended_route)
-    return repaired_route, added
+    return repair_route(grid, distance_calc, extended_route), added

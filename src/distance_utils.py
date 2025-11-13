@@ -13,38 +13,29 @@ class DistanceCalculator:
     
     def __init__(self, grid: HexGrid):
         self.grid = grid
-        self.graph, self.water_graph, self._tile_is_water = self._build_graphs()
+        self.water_graph = self._build_water_graph()
         self._distance_cache: Dict[Tuple[str, str], Optional[int]] = {}
         self._path_cache: Dict[Tuple[str, str], Optional[List[str]]] = {}
         
-    def _build_graphs(self) -> Tuple[nx.Graph, nx.Graph, Dict[str, bool]]:
-        """Build traversal graphs for water-only and mixed tile routing."""
-        full_graph = nx.Graph()
-        water_flags: Dict[str, bool] = {}
-
-        def _register_tile(tile: Tile) -> None:
-            full_graph.add_node(tile.id, is_water=tile.is_water())
-            water_flags[tile.id] = tile.is_water()
-
+    def _build_water_graph(self) -> nx.Graph:
+        """Build graph connecting all water tiles."""
+        graph = nx.Graph()
+        
+        # Add all water tiles as nodes
         for tile in self.grid.tiles.values():
-            _register_tile(tile)
-
+            if tile.is_water():
+                graph.add_node(tile.id)
+        
+        # Add edges between adjacent water tiles
         for tile in self.grid.tiles.values():
+            if not tile.is_water():
+                continue
             for neighbor_id in tile.neighbors:
                 neighbor_tile = self.grid.get_tile(neighbor_id)
-                if not neighbor_tile:
-                    continue
-
-                if tile.is_water() and neighbor_tile.is_water():
-                    full_graph.add_edge(tile.id, neighbor_id, weight=1)
-                elif tile.is_water() or neighbor_tile.is_water():
-                    # Permit transitions between land endpoints and adjacent water.
-                    full_graph.add_edge(tile.id, neighbor_id, weight=1)
-
-        water_nodes = [tile_id for tile_id, is_water in water_flags.items() if is_water]
-        water_graph = full_graph.subgraph(water_nodes).copy()
-
-        return full_graph, water_graph, water_flags
+                if neighbor_tile and neighbor_tile.is_water():
+                    graph.add_edge(tile.id, neighbor_id, weight=1)
+        
+        return graph
         
     def get_shortest_distance(self, from_tile_id: str, to_tile_id: str) -> Optional[int]:
         """Get shortest distance between two water tiles."""
@@ -52,12 +43,11 @@ class DistanceCalculator:
         
         if cache_key in self._distance_cache:
             return self._distance_cache[cache_key]
-        graph = self._select_graph(from_tile_id, to_tile_id)
 
         try:
             distance = int(
                 nx.shortest_path_length(
-                    graph, from_tile_id, to_tile_id, weight='weight'
+                    self.water_graph, from_tile_id, to_tile_id, weight='weight'
                 )
             )
             self._distance_cache[cache_key] = distance
@@ -72,11 +62,10 @@ class DistanceCalculator:
         
         if cache_key in self._path_cache:
             return self._path_cache[cache_key]
-        graph = self._select_graph(from_tile_id, to_tile_id)
             
         try:
             path = nx.shortest_path(
-                graph, from_tile_id, to_tile_id, weight='weight'
+                self.water_graph, from_tile_id, to_tile_id, weight='weight'
             )
             self._path_cache[cache_key] = path
             return path
@@ -86,10 +75,9 @@ class DistanceCalculator:
             
     def get_distances_from_tile(self, from_tile_id: str) -> Dict[str, int]:
         """Get shortest distances from one tile to all other water tiles."""
-        graph = self.water_graph if self._tile_is_water.get(from_tile_id) else self.graph
         try:
             distances = nx.single_source_shortest_path_length(
-                graph, from_tile_id
+                self.water_graph, from_tile_id
             )
             return distances
         except nx.NodeNotFound:
@@ -125,12 +113,3 @@ class DistanceCalculator:
         """Clear distance and path caches."""
         self._distance_cache.clear()
         self._path_cache.clear()
-                    
-    def __str__(self) -> str:
-        """String representation of distance calculator."""
-        return f"DistanceCalculator: {self.graph.number_of_nodes()} tiles, {self.graph.number_of_edges()} connections"
-
-    def _select_graph(self, from_tile_id: str, to_tile_id: str) -> nx.Graph:
-        if self._tile_is_water.get(from_tile_id) and self._tile_is_water.get(to_tile_id):
-            return self.water_graph
-        return self.graph

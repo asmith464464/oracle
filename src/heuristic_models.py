@@ -27,7 +27,3 @@ class TaskCycle:
 
     def get_task_tile_ids(self) -> List[str]:
         return [task.tile_id for task in self.tasks]
-
-    def __str__(self) -> str:  # pragma: no cover - debugging convenience
-        task_types = [task.task_type.value for task in self.tasks]
-        return f"Cycle({len(self.tasks)} tasks: {task_types})"

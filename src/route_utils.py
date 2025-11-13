@@ -26,56 +26,32 @@ def combine_detour(to_path: Optional[List[str]], from_path: Optional[List[str]])
 
 
 def repair_route(grid: HexGrid, distance_calc: DistanceCalculator, route: List[str]) -> List[str]:
+    """Insert shortest paths between non-adjacent tiles in route."""
     if not route:
         return []
 
     repaired: List[str] = [route[0]]
-    zeus = grid.zeus_tile_id
 
     for next_tile in route[1:]:
         current_tile = repaired[-1]
 
+        # Skip duplicate tiles
         if next_tile == current_tile:
             continue
 
-        next_obj = grid.get_tile(next_tile)
-        if next_obj and not next_obj.is_water() and next_tile != zeus:
-            if _reroute_via_water(grid, distance_calc, repaired, current_tile, next_tile):
-                continue
-            raise ValueError(
-                f"Route includes land tile {next_tile} that is unreachable from {current_tile}"
-            )
-
-        if _tiles_adjacent(grid, current_tile, next_tile):
+        # Check if tiles are adjacent
+        current_tile_obj = grid.get_tile(current_tile)
+        if current_tile_obj and next_tile in current_tile_obj.neighbors:
             repaired.append(next_tile)
             continue
 
+        # Insert shortest path between non-adjacent tiles
         bridge = distance_calc.get_shortest_path(current_tile, next_tile)
         if not bridge:
-            raise ValueError(f"No adjacent path from {current_tile} to {next_tile}")
+            raise ValueError(f"No path from {current_tile} to {next_tile}")
         append_path(repaired, bridge)
 
     return repaired
-
-
-def _tiles_adjacent(grid: HexGrid, first: str, second: str) -> bool:
-    tile = grid.get_tile(first)
-    return bool(tile and second in tile.neighbors)
-
-
-def _reroute_via_water(
-    grid: HexGrid,
-    distance_calc: DistanceCalculator,
-    route: List[str],
-    current_tile: str,
-    land_tile: str,
-) -> bool:
-    for neighbor in grid.get_adjacent_water_tiles(land_tile):
-        bridge = distance_calc.get_shortest_path(current_tile, neighbor.id)
-        if bridge:
-            append_path(route, bridge)
-            return True
-    return False
 
 
 def ensure_return_to_zeus(grid: HexGrid, distance_calc: DistanceCalculator, route: List[str]) -> List[str]:

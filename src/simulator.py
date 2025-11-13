@@ -3,7 +3,7 @@
 from typing import Dict, List, Optional, Tuple, Set
 
 from .map_model import HexGrid, TileType
-from .tasks import TaskManager, PlayerState, TaskStatus
+from .tasks import TaskManager, PlayerState, TaskStatus, STATUE_ITEM, OFFERING_ITEM
 from .simulator_models import SimulationResult, SimulationStep
 
 
@@ -77,6 +77,7 @@ class RouteSimulator:
         from_tile = self.grid.get_tile(from_tile_id)
         to_tile = self.grid.get_tile(to_tile_id)
         
+        # Validate tiles exist
         if not from_tile or not to_tile:
             return SimulationStep(
                 step_number=step_number,
@@ -85,8 +86,7 @@ class RouteSimulator:
                 action_target='Invalid tile in route'
             )
             
-        zeus_tile_id = self.grid.zeus_tile_id
-
+        # Validate adjacency
         if to_tile_id not in from_tile.neighbors:
             return SimulationStep(
                 step_number=step_number,
@@ -95,7 +95,8 @@ class RouteSimulator:
                 action_target=f'Tiles {from_tile_id}->{to_tile_id} are not adjacent'
             )
 
-        if to_tile_id != zeus_tile_id and not to_tile.is_water():
+        # Validate destination is water or Zeus
+        if to_tile_id != self.grid.zeus_tile_id and not to_tile.is_water():
             return SimulationStep(
                 step_number=step_number,
                 current_tile_id=from_tile_id,
@@ -104,17 +105,14 @@ class RouteSimulator:
             )
             
         # Execute the move
-        move_cost = 1
-        old_turn = player_state.total_turns
-        player_state.execute_move(to_tile_id, move_cost)
+        player_state.execute_move(to_tile_id, 1)
         
         step = SimulationStep(
             step_number=step_number,
             current_tile_id=to_tile_id,
             action_type='move',
-            moves_used=move_cost,
-            turn_number=player_state.total_turns,
-            player_state_snapshot=self._create_state_snapshot(player_state)
+            moves_used=1,
+            turn_number=player_state.total_turns
         )
         
         # Check for task completion
@@ -140,14 +138,12 @@ class RouteSimulator:
                 continue
 
             for task in self.task_manager.get_tasks_for_tile(neighbor_id):
-                if (
-                    task.status == TaskStatus.PENDING
-                    and task.can_execute(player_state.completed_task_ids)
-                    and self.task_manager.execute_task(task, player_state)
-                ):
+                if (task.status == TaskStatus.PENDING and 
+                    task.can_execute(player_state.completed_task_ids) and
+                    self.task_manager.execute_task(task, player_state)):
                     step.action_type = 'task'
                     step.action_target = f"{task.task_type.value}@{neighbor_id}"
-                    break
+                    # Continue checking for more tasks - don't return early
                         
     def _check_and_build_shrines(self, current_tile_id: str,
                                 player_state: PlayerState,
@@ -161,11 +157,8 @@ class RouteSimulator:
         # Check adjacent tiles for shrine building opportunities
         for neighbor_id in current_tile.neighbors:
             neighbor_tile = self.grid.get_tile(neighbor_id)
-            if not neighbor_tile:
-                continue
-                
-            # Check if this is a shrine tile we want to build
-            if (neighbor_tile.tile_type == TileType.SHRINE and 
+            if (neighbor_tile and 
+                neighbor_tile.tile_type == TileType.SHRINE and 
                 neighbor_id in shrine_positions and
                 neighbor_id not in player_state.shrines_built):
                 
@@ -173,24 +166,8 @@ class RouteSimulator:
                 self.task_manager.mark_shrine_built(neighbor_id)
                 step.action_type = 'shrine'
                 step.action_target = f"shrine@{neighbor_id}"
-                break
-                
-    def _create_state_snapshot(self, player_state: PlayerState) -> Dict:
-        """Create a snapshot of player state for debugging."""
-        return {
-            'total_moves': player_state.total_moves,
-            'total_turns': player_state.total_turns,
-            'cargo': [
-                {
-                    'item_type': item.item_type,
-                    'colour': item.colour,
-                }
-                for item in player_state.cargo
-            ],
-            'completed_tasks_count': len(player_state.completed_task_ids),
-            'shrines_built_count': len(player_state.shrines_built)
-        }
-        
+                # Continue checking for more shrines - don't return early
+
     def _validate_final_state(self, player_state: PlayerState, 
                             route: List[str], errors: List[str]) -> bool:
         """Validate that the final state meets all requirements."""
@@ -212,11 +189,11 @@ class RouteSimulator:
             success = False
             
         # Check inventory consistency
-        if player_state.can_deliver_statue():
+        if player_state.has_item(STATUE_ITEM):
             errors.append("Player still has statue at end of route")
             success = False
             
-        if player_state.can_deliver_offerings():
+        if player_state.has_item(OFFERING_ITEM):
             errors.append("Player still has undelivered offerings")
             success = False
 
@@ -260,10 +237,6 @@ class RouteSimulator:
                 errors.append(f"Move {i}: Destination {to_tile_id} is not water")
                 
         return len(errors) == 0, errors
-        
-    def __str__(self) -> str:
-        """String representation of route simulator."""
-        return f"RouteSimulator: {len(self.task_manager.tasks)} tasks to simulate"
 
     def _error_result(self, message: str) -> SimulationResult:
         return SimulationResult(

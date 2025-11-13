@@ -96,8 +96,3 @@ class ShrineOptimizer:
         optimized_route = ensure_return_to_zeus(self.grid, self.distance_calc, optimized_route)
 
         return optimized_route, shrine_positions
-        
-    def __str__(self) -> str:
-        """String representation of shrine optimizer."""
-        candidates = len(self.task_manager.get_shrine_candidates())
-        return f"ShrineOptimizer: {candidates} shrine candidates available"

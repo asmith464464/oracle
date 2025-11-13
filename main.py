@@ -26,8 +26,8 @@ from src.utils import (
 )
 
 
-def main():
-    """Main function to run the Oracle Heuristic Route Planner."""
+def create_argument_parser() -> argparse.ArgumentParser:
+    """Configure command-line arguments for the route planner."""
     parser = argparse.ArgumentParser(
         description="Oracle Heuristic Route Planner - Optimize routes on hex-grid maps"
     )
@@ -54,10 +54,9 @@ def main():
     parser.add_argument('--seed', type=int,
                        help='Random seed for reproducible results')
     parser.add_argument('--cycles', type=str,
-                       help='Custom cycles as JSON array of arrays of tile IDs. Example: \'[["tile_042","tile_033"],["tile_005","tile_015","tile_026"]]\'')
+                       help='Custom cycles as JSON array of arrays of tile IDs')
     parser.add_argument('--cycles-file', type=str,
                        help='Path to JSON file containing custom cycle specification')
-
     
     # Output options
     parser.add_argument('--visualize', action='store_true',
@@ -75,7 +74,12 @@ def main():
     parser.add_argument('--log-file', type=str,
                        help='Save logs to file')
     
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    """Main function to run the Oracle Heuristic Route Planner."""
+    args = create_argument_parser().parse_args()
     
     # Set up logging
     setup_logging(args.log_level, args.log_file)

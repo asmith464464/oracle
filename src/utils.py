@@ -66,124 +66,10 @@ def _build_lattice_neighbors(points: np.ndarray) -> List[List[int]]:
         return [[] for _ in range(total)]
 
     neighbor_threshold = float(finite_distances.min()) * 1.05
-    adjacency: List[List[int]] = []
-    for row in distances:
-        neighbor_indices = np.where(row <= neighbor_threshold)[0]
-        adjacency.append(neighbor_indices.tolist())
-    return adjacency
+    return [np.where(row <= neighbor_threshold)[0].tolist() for row in distances]
 
 
-def _select_land_tile(
-    available_water: Set[int],
-    reserved_water: Set[int],
-    neighbor_lookup: List[List[int]],
-    land_indices: Set[int],
-    center_index: int,
-    lattice_points: Optional[np.ndarray] = None,
-) -> Optional[int]:
-    """Select a water tile that can be converted to land while keeping adjacency to water.
-    
-    Prefers tiles further from center to spread out land tiles.
-    """
-    candidates = [idx for idx in available_water if idx not in reserved_water]
-    if not candidates:
-        return None
 
-    # Filter to candidates that maintain water connectivity
-    valid_candidates = []
-    for idx in candidates:
-        if any(n != center_index and n not in land_indices for n in neighbor_lookup[idx]):
-            valid_candidates.append(idx)
-    
-    if not valid_candidates:
-        valid_candidates = candidates
-    
-    # Prefer candidates further from center for better spread, but with randomness
-    if lattice_points is not None and len(lattice_points) > center_index:
-        center_pos = lattice_points[center_index]
-        # Calculate distances from center
-        distances = [(idx, np.linalg.norm(lattice_points[idx] - center_pos)) for idx in valid_candidates]
-        
-        # Use weighted random selection favoring further tiles
-        # Weight = distance^2 to strongly prefer outer tiles while maintaining some randomness
-        total_weight = sum(dist ** 2 for _, dist in distances)
-        if total_weight > 0:
-            r = random.uniform(0, float(total_weight))
-            cumulative = 0
-            for idx, dist in distances:
-                cumulative += dist ** 2
-                if cumulative >= r:
-                    return idx
-        
-        # Fallback if all distances are 0
-        random.shuffle(valid_candidates)
-        return valid_candidates[0]
-    
-    random.shuffle(valid_candidates)
-    return valid_candidates[0]
-
-
-def _reserve_adjacent_water(
-    tile_index: int,
-    reserved_water: Set[int],
-    neighbor_lookup: List[List[int]],
-    land_indices: Set[int],
-    center_index: int,
-) -> bool:
-    """Reserve a neighboring water tile to guarantee access for the selected land tile."""
-    neighbors = neighbor_lookup[tile_index][:]
-    random.shuffle(neighbors)
-
-    for neighbor in neighbors:
-        if neighbor == center_index or neighbor in land_indices:
-            continue
-        if neighbor not in reserved_water:
-            reserved_water.add(neighbor)
-            return True
-
-    return False
-
-
-def _add_land_tile(
-    available_water: Set[int],
-    reserved_water: Set[int],
-    land_indices: Set[int],
-    neighbor_lookup: List[List[int]],
-    center_index: int,
-    required_land_tiles: int,
-    land_assignments: Dict[int, Tuple[TileType, Optional[str]]],
-    tile_type: TileType,
-    colours: Optional[str],
-    lattice_points: Optional[np.ndarray] = None,
-) -> bool:
-    """Helper to add a land tile with common validation."""
-    remaining_slots = required_land_tiles - len(land_assignments)
-    convertible = len(available_water - reserved_water)
-    if convertible < remaining_slots:
-        return False
-
-    idx = _select_land_tile(
-        available_water,
-        reserved_water,
-        neighbor_lookup,
-        land_indices,
-        center_index,
-        lattice_points,
-    )
-    if idx is None:
-        return False
-
-    available_water.remove(idx)
-    land_indices.add(idx)
-    land_assignments[idx] = (tile_type, colours)
-    
-    return _reserve_adjacent_water(
-        idx,
-        reserved_water,
-        neighbor_lookup,
-        land_indices,
-        center_index,
-    )
 
 
 def create_example_map(
@@ -192,157 +78,115 @@ def create_example_map(
     water_ratio: float = 0.6,
     max_attempts: int = 60,
 ) -> HexGrid:
-    """Create an example hex grid map for testing using hexalattice helpers."""
-
+    """Create an example hex grid map with simple random tile placement."""
     if width <= 0 or height <= 0:
         raise ValueError("Map dimensions must be positive")
 
+    # Build hex lattice structure
     lattice_points, _ = hexalattice.create_hex_grid(
-        nx=width,
-        ny=height,
-        do_plot=False,
-        align_to_origin=True,
+        nx=width, ny=height, do_plot=False, align_to_origin=True
     )
-    lattice_points = np.asarray(lattice_points, dtype=float)
-    neighbor_lookup = _build_lattice_neighbors(lattice_points)
+    neighbor_lookup = _build_lattice_neighbors(np.asarray(lattice_points, dtype=float))
 
-    tile_ids = [f"tile_{index:03d}" for index in range(width * height)]
-    tile_neighbors = {
-        tile_ids[idx]: [tile_ids[n_idx] for n_idx in neighbor_lookup[idx]]
-        for idx in range(len(tile_ids))
-    }
-    tile_coords = {idx: (idx % width, idx // width) for idx in range(len(tile_ids))}
-
+    total_tiles = width * height
+    tile_ids = [f"tile_{i:03d}" for i in range(total_tiles)]
+    tile_coords = {i: (i % width, i // width) for i in range(total_tiles)}
+    
     center_index = (height // 2) * width + (width // 2)
     center_tile_id = tile_ids[center_index]
 
-    per_colour_requirements = {
-        TileType.MONSTER: 2,
-        TileType.OFFERING: 2,
-        TileType.STATUE_SOURCE: 1,
-        TileType.STATUE_ISLAND: 3,
-        TileType.TEMPLE: 1,
-    }
-    shrine_count = 3
-    total_tiles = width * height
-    required_land_per_colour = sum(per_colour_requirements.values())
-    # Need enough tiles for at least 3 colours with full requirements
-    # Plus some extra tiles for distributing other colours
-    min_required_tiles = required_land_per_colour * 3 + shrine_count + 10
-    if total_tiles <= min_required_tiles:
+    # Validate map size
+    if total_tiles < 46:  # 36 land + 3 shrines + some water
         raise ValueError("Map dimensions too small for required task allocation")
 
+    # Define exact tile distribution (6 colours each)
+    all_colours = ['red', 'blue', 'green', 'yellow', 'purple', 'pink']
+    
     for attempt in range(1, max_attempts + 1):
         grid = HexGrid()
-
-        available_water: Set[int] = {idx for idx in range(total_tiles) if idx != center_index}
-        reserved_water: Set[int] = set()
-        land_indices: Set[int] = set()
         
-        # Create exact tile distribution:
-        # 9 monsters, 6 offerings, 6 statue sources, 6 temples, 6 statue islands, 3 shrines
-        land_assignments: Dict[int, Tuple[TileType, Optional[str]]] = {}
-        all_colours = ['red', 'blue', 'green', 'yellow', 'purple', 'pink']
-        success = True
+        # Randomly select 36 non-center tiles for land
+        available_indices = [i for i in range(total_tiles) if i != center_index]
+        random.shuffle(available_indices)
+        land_indices = set(available_indices[:36])
         
-        # Calculate land tiles needed: 9+6+6+6+6+3 = 36 tiles
-        required_land_tiles = 36
-        
-        # Define all tile specifications: (tile_type, colour_spec)
+        # Build tile specs: exactly 36 tiles with predefined colour patterns
         tile_specs = []
         
-        # Phase 1: Single-colour tiles (statue sources and temples)
+        # 6 statue sources + 6 temples (1 per colour)
         for colour in all_colours:
             tile_specs.extend([(TileType.STATUE_SOURCE, colour), (TileType.TEMPLE, colour)])
         
-        # Phase 2: Single-colour monsters (6 total)
+        # 6 single-colour monsters + 3 dual-colour monsters
         tile_specs.extend((TileType.MONSTER, colour) for colour in all_colours)
+        tile_specs.extend([
+            (TileType.MONSTER, f"{all_colours[i]},{all_colours[i+3]}")
+            for i in range(3)
+        ])
         
-        # Phase 3: Dual-colour monsters (3 total)
-        tile_specs.extend((TileType.MONSTER, f"{all_colours[i]},{all_colours[i+3]}") for i in range(3))
-        
-        # Phase 4: Dual-colour offerings (6 total)
+        # 6 dual-colour offerings
         offering_pairs = [(0,1), (0,2), (1,3), (2,4), (3,5), (4,5)]
-        tile_specs.extend((TileType.OFFERING, f"{all_colours[i]},{all_colours[j]}") for i, j in offering_pairs)
+        tile_specs.extend(
+            (TileType.OFFERING, f"{all_colours[i]},{all_colours[j]}")
+            for i, j in offering_pairs
+        )
         
-        # Phase 5: Triple-colour statue islands (6 total)
+        # 6 triple-colour statue islands
         island_triplets = [(0,1,2), (0,3,4), (0,4,5), (1,3,5), (1,2,4), (2,3,5)]
-        tile_specs.extend((TileType.STATUE_ISLAND, f"{all_colours[i]},{all_colours[j]},{all_colours[k]}") for i, j, k in island_triplets)
+        tile_specs.extend(
+            (TileType.STATUE_ISLAND, f"{all_colours[i]},{all_colours[j]},{all_colours[k]}")
+            for i, j, k in island_triplets
+        )
         
-        # Phase 6: Shrines (3 total, no colours)
-        tile_specs.extend((TileType.SHRINE, None) for _ in range(shrine_count))
+        # 3 shrines (no colours)
+        tile_specs.extend((TileType.SHRINE, None) for _ in range(3))
         
-        # Create all tiles
-        for tile_type, colours in tile_specs:
-            if not _add_land_tile(
-                available_water, reserved_water, land_indices,
-                neighbor_lookup, center_index, required_land_tiles,
-                land_assignments, tile_type, colours, lattice_points,
-            ):
-                success = False
-                break
-        
-        if not success or len(land_assignments) != required_land_tiles:
-            continue
-
-        for idx, tile_id in enumerate(tile_ids):
-            if idx == center_index:
-                tile_type = TileType.WATER
-                colour_str = None
-            elif idx in land_assignments:
-                tile_type, colour_str = land_assignments[idx]
-            else:
-                tile_type = TileType.WATER
-                colour_str = None
-
-            # Parse comma-separated colours
-            if colour_str and ',' in colour_str:
-                colour_tuple = tuple(colour_str.split(','))
-            elif colour_str:
-                colour_tuple = (colour_str,)
-            else:
-                colour_tuple = ()
-
-            tile = Tile(
-                id=tile_id,
+        # Assign tile specs to random land indices
+        land_list = list(land_indices)
+        for idx_pos, (tile_type, colour_str) in enumerate(tile_specs):
+            tile_idx = land_list[idx_pos]
+            
+            # Parse colour string into tuple
+            colours = tuple(colour_str.split(',')) if colour_str and ',' in colour_str else \
+                     (colour_str,) if colour_str else ()
+            
+            grid.add_tile(Tile(
+                id=tile_ids[tile_idx],
                 tile_type=tile_type,
-                coords=tile_coords[idx],
-                neighbors=list(tile_neighbors[tile_id]),
-                colours=colour_tuple,
-            )
-            grid.add_tile(tile)
-
+                coords=tile_coords[tile_idx],
+                neighbors=[tile_ids[n] for n in neighbor_lookup[tile_idx]],
+                colours=colours
+            ))
+        
+        # Create water tiles for non-land indices
+        existing_tile_ids = set(grid.tiles.keys())
+        for idx in range(total_tiles):
+            if tile_ids[idx] not in existing_tile_ids:
+                grid.add_tile(Tile(
+                    id=tile_ids[idx],
+                    tile_type=TileType.WATER,
+                    coords=tile_coords[idx],
+                    neighbors=[tile_ids[n] for n in neighbor_lookup[idx]],
+                    colours=()
+                ))
+        
         grid.set_zeus_tile(center_tile_id)
-        grid.ensure_task_accessibility()
-
+        grid.ensure_task_accessibility()  # Converts tiles to water if needed
+        
+        # Validate
         issues = grid.validate_grid()
-        unreachable_tasks = [
-            tile.id
-            for tile in grid.get_task_tiles()
-            if not any(neighbor.is_water() for neighbor in grid.get_neighbors(tile.id))
-        ]
-        if unreachable_tasks:
-            issues.append(
-                f"Task tiles without adjacent water: {len(unreachable_tasks)}"
-            )
         eligible_colours = find_colours_with_required_tasks(grid)
         if len(eligible_colours) < 6:
-            issues.append(
-                f"Insufficient eligible colours with required tasks: {len(eligible_colours)} (need exactly 6)"
-            )
-
+            issues.append(f"Only {len(eligible_colours)} eligible colours (need 6)")
+        
         if not issues:
-            # Success! Map has exactly 6 colours with complete task sets
             return grid
-
+        
         logging.warning(
-            "Example map generation attempt %s failed validation: issues=%s eligible_colours=%s",
-            attempt,
-            issues,
-            len(eligible_colours),
+            "Map generation attempt %s failed: %s", attempt, issues
         )
-
-    raise ValueError("Unable to generate a valid example map after multiple attempts")
+    
+    raise ValueError("Unable to generate valid map after multiple attempts")
 
 
 def load_map_from_json(filepath: str) -> HexGrid:

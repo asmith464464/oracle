@@ -3,14 +3,17 @@ Core cycle-based heuristic for route optimization.
 """
 
 import math
-import numpy as np
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from .map_model import HexGrid
 from .tasks import Task, TaskManager
 from .distance_utils import DistanceCalculator
 from .heuristic_models import TaskCycle
-from .route_utils import append_path, repair_route, ensure_return_to_zeus
+from .route_utils import repair_route, ensure_return_to_zeus, append_path
+from .cycle_clustering import CycleClusterer
+from .cycle_dependencies import CycleDependencyAnalyzer
+from .route_builder import RouteBuilder
+from .cycle_aligner import CycleAligner
 
 
 class CycleHeuristic:
@@ -24,7 +27,11 @@ class CycleHeuristic:
         self.task_manager = task_manager
         self.distance_calc = DistanceCalculator(grid)
         self.cycles: List[TaskCycle] = []
-        self._task_distance_cache: Dict[Tuple[str, str], Optional[int]] = {}
+        
+        # Helper components
+        self.clusterer = CycleClusterer(grid, self.CYCLE_DISTANCE_THRESHOLD, self.MAX_CYCLE_TASKS)
+        self.route_builder = RouteBuilder(grid, self.distance_calc)
+        self.cycle_aligner = CycleAligner(grid)
 
     def solve(self) -> Tuple[List[str], Dict]:
         """Generate a complete route that satisfies the three-cycle brief."""
@@ -45,7 +52,7 @@ class CycleHeuristic:
         repaired_route = repair_route(self.grid, self.distance_calc, base_route)
         repaired_route = ensure_return_to_zeus(self.grid, self.distance_calc, repaired_route)
         repaired_route = repair_route(self.grid, self.distance_calc, repaired_route)
-        self._realign_cycles_to_route(repaired_route)
+        self.cycle_aligner.realign_cycles_to_route(self.cycles, repaired_route)
 
         stats = self._calculate_statistics(repaired_route)
         return repaired_route, stats
@@ -101,7 +108,7 @@ class CycleHeuristic:
                 best_dist = float('inf')
                 
                 for task in pending.values():
-                    path = self._best_path_to_task(current_tile, task)
+                    path = self.route_builder._best_path_to_task(current_tile, task)
                     if path and len(path) < best_dist:
                         best_dist = len(path)
                         best_task = task
@@ -141,152 +148,67 @@ class CycleHeuristic:
             if connector_start is not None and connector_end is not None and connector_start < connector_end:
                 cycles[i].connector_to_next = repaired_route[connector_start:connector_end + 1]
         
-        self._realign_cycles_to_route(repaired_route)
+        self.cycle_aligner.realign_cycles_to_route(self.cycles, repaired_route)
 
         stats = self._calculate_statistics(repaired_route)
         return repaired_route, stats
 
-    def _cluster_tasks_by_proximity(self, tasks: List[Task]) -> List[List[Task]]:
-        """Group tasks into spatially-balanced clusters using k-means-like approach."""
-        if not tasks:
-            return []
-        
-        n_tasks = len(tasks)
-        distance_matrix = np.zeros((n_tasks, n_tasks))
-        
-        # Build distance matrix between task land tiles
-        for i in range(n_tasks):
-            for j in range(i + 1, n_tasks):
-                dist = self._task_land_distance(tasks[i].tile_id, tasks[j].tile_id)
-                if dist is None:
-                    dist = 999
-                distance_matrix[i, j] = dist
-                distance_matrix[j, i] = dist
-        
-        # Estimate number of clusters needed (aim for ~3-4 tasks per cluster to allow flexibility)
-        target_clusters = max(2, (n_tasks + 3) // 4)
-        
-        # Pick initial seeds: maximally spread out tasks
-        seeds = []
-        remaining = set(range(n_tasks))
-        
-        # First seed: arbitrary (deterministic)
-        first_seed = min(remaining)
-        seeds.append(first_seed)
-        remaining.remove(first_seed)
-        
-        # Subsequent seeds: maximize minimum distance to existing seeds
-        while len(seeds) < target_clusters and remaining:
-            best_candidate = None
-            best_min_dist = -1
-            
-            for candidate in sorted(remaining):
-                min_dist_to_seeds = min(distance_matrix[candidate, seed] for seed in seeds)
-                if min_dist_to_seeds > best_min_dist or (min_dist_to_seeds == best_min_dist and (best_candidate is None or candidate < best_candidate)):
-                    best_min_dist = min_dist_to_seeds
-                    best_candidate = candidate
-            
-            if best_candidate is not None:
-                seeds.append(best_candidate)
-                remaining.remove(best_candidate)
-        
-        # Assign each remaining task to nearest cluster, respecting distance threshold
-        clusters = {seed: [seed] for seed in seeds}
-        
-        for task_idx in sorted(remaining):
-            # Find nearest cluster where task is within threshold distance
-            best_cluster = None
-            best_min_dist = float('inf')
-            
-            for seed in seeds:
-                if len(clusters[seed]) >= self.MAX_CYCLE_TASKS:
-                    continue  # Cluster is full
-                
-                # Calculate minimum distance to any task in this cluster
-                min_dist_to_cluster = min(distance_matrix[task_idx, t] for t in clusters[seed])
-                
-                # Only consider clusters where task is close enough
-                if min_dist_to_cluster <= self.CYCLE_DISTANCE_THRESHOLD:
-                    if min_dist_to_cluster < best_min_dist or (min_dist_to_cluster == best_min_dist and (best_cluster is None or seed < best_cluster)):
-                        best_min_dist = min_dist_to_cluster
-                        best_cluster = seed
-            
-            if best_cluster is not None:
-                clusters[best_cluster].append(task_idx)
-            else:
-                # No cluster within threshold - create new single-task cluster
-                clusters[task_idx] = [task_idx]
-        
-        # Convert to list of task lists
-        result = [[tasks[i] for i in cluster] for cluster in clusters.values()]
-        return result
+
 
     def _build_route_with_cycles(
         self, tasks: List[Task], start_tile: str
     ) -> Tuple[List[str], List[TaskCycle]]:
-        """Build route by visiting spatially-clustered cycles. Ignores cargo/dependencies for clean visualization."""
+        """Build route by visiting spatially-clustered cycles, ordered by cargo dependencies."""
         # Build a map of tile_id to all tasks for that tile
         tasks_by_tile = {}
         for task in tasks:
-            if task.tile_id not in tasks_by_tile:
-                tasks_by_tile[task.tile_id] = []
-            tasks_by_tile[task.tile_id].append(task)
+            tasks_by_tile.setdefault(task.tile_id, []).append(task)
         
         # Use one task per tile for clustering (visiting a tile once completes all its tasks)
-        unique_tasks = {}
-        for task in tasks:
-            if task.tile_id not in unique_tasks:
-                unique_tasks[task.tile_id] = task
-        deduplicated_tasks = list(unique_tasks.values())
+        deduplicated_tasks = [tasks_by_tile[tile_id][0] for tile_id in tasks_by_tile]
         
-        # Cluster tasks by spatial proximity only
-        task_clusters = self._cluster_tasks_by_proximity(deduplicated_tasks)
+        # Step 1: Cluster tasks by spatial proximity only
+        task_clusters = self.clusterer.cluster_tasks(deduplicated_tasks)
         
-        # Route through each cluster, visiting all tasks greedily by distance
+        # Step 2: Build preliminary cycles without routing yet
+        preliminary_cycles = [
+            TaskCycle(tasks=[task for cluster_task in cluster_tasks 
+                           for task in tasks_by_tile[cluster_task.tile_id]])
+            for cluster_tasks in task_clusters if cluster_tasks
+        ]
+        
+        # Step 3: Reorder cycles based on cargo dependencies
+        ordered_cycles = CycleDependencyAnalyzer.topological_sort(preliminary_cycles)
+        
+        # Step 4: Build route through ordered cycles
         route: List[str] = [start_tile]
         cycles: List[TaskCycle] = []
         current_tile = start_tile
         
-        for cluster_tasks in task_clusters:
-            connector_start_idx = len(route) - 1
-            visited_tasks = []
-            pending = {t.id: t for t in cluster_tasks}
+        for cycle in ordered_cycles:
+            # Get unique task tiles for this cycle
+            task_tiles_set = {task.tile_id for task in cycle.tasks}
+            cluster_tasks = [task for task in deduplicated_tasks if task.tile_id in task_tiles_set]
+            
+            if not cluster_tasks:
+                continue
             
             # Find entry point to this cluster (closest task to current position)
-            entry_task = None
-            entry_path = None
-            entry_dist = float('inf')
-            
-            for task in pending.values():
-                path = self._best_path_to_task(current_tile, task)
-                if path and len(path) < entry_dist:
-                    entry_dist = len(path)
-                    entry_task = task
-                    entry_path = path
-            
+            entry_task, entry_path = self.route_builder._find_nearest_task(current_tile, cluster_tasks)
             if not entry_task or not entry_path:
                 continue
             
             # Travel to cluster (this is the connector, not part of internal route)
             append_path(route, entry_path)
-            current_tile = route[-1]
             cycle_entry_idx = len(route) - 1  # Mark where cycle actually starts
-            visited_tasks.append(entry_task)
-            pending.pop(entry_task.id)
+            
+            visited_tasks = [entry_task]
+            pending = {t.id: t for t in cluster_tasks if t.id != entry_task.id}
+            current_tile = route[-1]
             
             # Visit remaining tasks in this cluster by proximity (internal to cycle)
             while pending:
-                best_task = None
-                best_path = None
-                best_dist = float('inf')
-                
-                for task in pending.values():
-                    path = self._best_path_to_task(current_tile, task)
-                    if path and len(path) < best_dist:
-                        best_dist = len(path)
-                        best_task = task
-                        best_path = path
-                
+                best_task, best_path = self.route_builder._find_nearest_task(current_tile, list(pending.values()))
                 if not best_task or not best_path:
                     break
                 
@@ -297,81 +219,27 @@ class CycleHeuristic:
             
             # Create cycle with internal route (excluding connector)
             # Include ALL tasks for each visited tile (multi-color tiles have multiple tasks)
-            if visited_tasks:
-                all_cycle_tasks = []
-                for task in visited_tasks:
-                    all_cycle_tasks.extend(tasks_by_tile[task.tile_id])
-                
-                cycle_exit_idx = len(route) - 1
-                cycle = TaskCycle(tasks=all_cycle_tasks)
-                cycle.entry_index = cycle_entry_idx
-                cycle.exit_index = cycle_exit_idx
-                cycle.internal_route = route[cycle_entry_idx:cycle_exit_idx + 1]
-                cycle.entry_tile = route[cycle_entry_idx]
-                cycle.exit_tile = route[cycle_exit_idx]
-                cycle.total_distance = cycle_exit_idx - cycle_entry_idx
-                
-                # Store connector from previous position to this cycle's entry
-                if cycles:  # Not the first cycle
-                    prev_exit = cycles[-1].exit_index
-                    cycles[-1].connector_to_next = route[prev_exit:cycle_entry_idx + 1]
-                
-                cycles.append(cycle)
+            all_cycle_tasks = [task for visited_task in visited_tasks 
+                             for task in tasks_by_tile[visited_task.tile_id]]
+            
+            cycle_exit_idx = len(route) - 1
+            final_cycle = TaskCycle(tasks=all_cycle_tasks)
+            final_cycle.entry_index = cycle_entry_idx
+            final_cycle.exit_index = cycle_exit_idx
+            final_cycle.internal_route = route[cycle_entry_idx:cycle_exit_idx + 1]
+            final_cycle.entry_tile = route[cycle_entry_idx]
+            final_cycle.exit_tile = route[cycle_exit_idx]
+            final_cycle.total_distance = cycle_exit_idx - cycle_entry_idx
+            
+            # Store connector from previous position to this cycle's entry
+            if cycles:  # Not the first cycle
+                prev_exit = cycles[-1].exit_index
+                cycles[-1].connector_to_next = route[prev_exit:cycle_entry_idx + 1]
+            
+            cycles.append(final_cycle)
         
         return route, cycles
-    
-    def _best_path_to_task(self, current_tile: str, task: Task) -> Optional[List[str]]:
-        candidates = self._adjacent_water_ids(task.tile_id)
-        best_path: Optional[List[str]] = None
 
-        for candidate in candidates:
-            path = self.distance_calc.get_shortest_path(current_tile, candidate)
-            if path and (not best_path or (len(path), candidate) < (len(best_path), best_path[-1])):
-                best_path = path
-
-        return best_path
-
-    def _adjacent_water_ids(self, tile_id: str) -> List[str]:
-        """Get sorted list of adjacent water tile IDs."""
-        tile = self.grid.get_tile(tile_id)
-        if not tile:
-            return []
-        water_ids: List[str] = []
-        for neighbor_id in tile.neighbors:
-            neighbor_tile = self.grid.get_tile(neighbor_id)
-            if neighbor_tile and neighbor_tile.is_water():
-                water_ids.append(neighbor_id)
-        water_ids.sort()
-        return water_ids
-
-    def _task_land_distance(self, first_tile_id: str, second_tile_id: str) -> Optional[int]:
-        """Calculate hex distance between two land tiles (for clustering)."""
-        if first_tile_id == second_tile_id:
-            return 0
-
-        key: Tuple[str, str]
-        if first_tile_id <= second_tile_id:
-            key = (first_tile_id, second_tile_id)
-        else:
-            key = (second_tile_id, first_tile_id)
-        if key in self._task_distance_cache:
-            return self._task_distance_cache[key]
-
-        # Use hex coordinate distance for clustering (Manhattan distance on hex grid)
-        first_tile = self.grid.get_tile(first_tile_id)
-        second_tile = self.grid.get_tile(second_tile_id)
-        
-        if not first_tile or not second_tile:
-            self._task_distance_cache[key] = None
-            return None
-        
-        # Hex Manhattan distance
-        q1, r1 = first_tile.coords
-        q2, r2 = second_tile.coords
-        distance = abs(q1 - q2) + abs(r1 - r2)
-        
-        self._task_distance_cache[key] = distance
-        return distance
 
     def _calculate_statistics(self, route: List[str]) -> Dict:
         """Calculate high-level metrics for the constructed route."""
@@ -386,58 +254,6 @@ class CycleHeuristic:
             "tasks_per_cycle": [len(cycle.tasks) for cycle in self.cycles],
             "cycle_distances": [cycle.total_distance for cycle in self.cycles],
         }
-
-    def _realign_cycles_to_route(self, route: List[str]) -> None:
-        """Reconcile cycle segments with the final repaired route."""
-        if not route or not self.cycles:
-            return
-
-        search_start = 0
-
-        for idx, cycle in enumerate(self.cycles):
-            entry_idx = self._locate_tile(route, cycle.entry_tile, search_start)
-            if entry_idx is None:
-                entry_idx = self._find_task_index(route, cycle, search_start, reverse=False)
-
-            if entry_idx is None:
-                cycle.entry_index = None
-                cycle.exit_index = None
-                cycle.internal_route = []
-                continue
-
-            exit_idx = self._locate_tile(route, cycle.exit_tile, entry_idx)
-            if exit_idx is None:
-                exit_idx = self._find_task_index(route, cycle, entry_idx, reverse=True)
-
-            if exit_idx is None or exit_idx < entry_idx:
-                exit_idx = entry_idx
-
-            cycle.entry_index = entry_idx
-            cycle.exit_index = exit_idx
-            cycle.internal_route = route[entry_idx : exit_idx + 1]
-            cycle.total_distance = max(0, len(cycle.internal_route) - 1)
-            search_start = exit_idx
-
-    def _locate_tile(self, route: List[str], tile_id: Optional[str], start: int) -> Optional[int]:
-        """Return the first index of ``tile_id`` in ``route`` at or after ``start``."""
-        if tile_id is None:
-            return None
-        try:
-            return route.index(tile_id, max(0, start))
-        except ValueError:
-            return None
-
-    def _find_task_index(self, route: List[str], cycle: TaskCycle, start: int, reverse: bool = False) -> Optional[int]:
-        """Locate index of any tile adjacent to a task, searching forward or backward."""
-        task_ids = cycle.get_task_tile_ids()
-        task_set = set(task_ids)
-        indices = range(len(route) - 1, max(0, start) - 1, -1) if reverse else range(max(0, start), len(route))
-        
-        for idx in indices:
-            tile_id = route[idx]
-            if tile_id in task_set or (tile := self.grid.get_tile(tile_id)) and any(task_id in tile.neighbors for task_id in task_ids):
-                return idx
-        return None
 
     def get_cycle_summary(self) -> List[Dict]:
         """Expose cycle metadata in a structure compatible with visualizers."""
@@ -460,8 +276,4 @@ class CycleHeuristic:
             )
 
         return summary
-
-    def __str__(self) -> str:
-        """String representation of heuristic solver."""
-        return f"CycleHeuristic: {len(self.cycles)} cycles, {len(self.task_manager.tasks)} tasks"
 

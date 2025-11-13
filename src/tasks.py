@@ -59,12 +59,6 @@ class Task:
             self.status = TaskStatus.COMPLETED
         else:
             self.status = TaskStatus.PENDING
-        
-    def __str__(self) -> str:
-        return (
-            f"Task({self.task_type.value}@{self.tile_id}, "
-            f"{self.colour}, {self.status.value})"
-        )
 
 
 @dataclass(frozen=True)
@@ -87,6 +81,8 @@ class PlayerState:
     completed_task_ids: Set[str] = field(default_factory=set)
     shrines_built: List[str] = field(default_factory=list)
     
+    CARGO_CAPACITY = 2  # Maximum cargo slots
+    
     def execute_move(self, to_tile_id: str, moves: int = 1) -> None:
         """Execute a move to another tile."""
         self.current_tile_id = to_tile_id
@@ -95,22 +91,10 @@ class PlayerState:
         # Update turns if we've used all moves
         if self.total_moves % 3 == 0:
             self.total_turns += 1
-            
-    def cargo_capacity(self) -> int:
-        """Total cargo slots available on the ship."""
-        return 2
-
-    def cargo_space_remaining(self) -> int:
-        """Number of free cargo slots."""
-        return max(0, self.cargo_capacity() - len(self.cargo))
-
-    def cargo_full(self) -> bool:
-        """Whether all cargo slots are occupied."""
-        return self.cargo_space_remaining() == 0
 
     def add_cargo(self, item: CargoItem) -> bool:
         """Attempt to store an item in cargo; return True on success."""
-        if self.cargo_full():
+        if len(self.cargo) >= self.CARGO_CAPACITY:
             return False
         self.cargo.append(item)
         return True
@@ -126,12 +110,11 @@ class PlayerState:
             return True
         return False
 
-    def count_cargo(self, item_type: str, colour: Optional[str] = None) -> int:
-        """Count cargo items matching the provided filters."""
-        return sum(
-            1
+    def has_item(self, item_type: str, colour: Optional[str] = None) -> bool:
+        """Check if cargo contains a matching item."""
+        return any(
+            item.item_type == item_type and (colour is None or item.colour == colour)
             for item in self.cargo
-            if item.item_type == item_type and (colour is None or item.colour == colour)
         )
 
     def complete_task(self, task: Task) -> None:
@@ -154,14 +137,6 @@ class PlayerState:
     def build_shrine(self, tile_id: str) -> None:
         """Build a shrine at the specified tile."""
         self.shrines_built.append(tile_id)
-        
-    def can_deliver_statue(self, colour: Optional[str] = None) -> bool:
-        """Check if player can deliver a statue, optionally filtering by colour."""
-        return self.count_cargo(STATUE_ITEM, colour) > 0
-        
-    def can_deliver_offerings(self, colour: Optional[str] = None) -> bool:
-        """Check if player has offerings available, optionally filtered by colour."""
-        return self.count_cargo(OFFERING_ITEM, colour) > 0
 
 
 class TaskManager:
@@ -193,24 +168,11 @@ class TaskManager:
         self.scheduled_shrines.clear()
         self.completed_shrines.clear()
 
-        def _pick_single_tile(
-            tiles_by_type: Dict[TileType, List[Tile]],
-            tile_type: TileType,
-            colour: str,
-        ) -> Tile:
-            candidates = tiles_by_type.get(tile_type, [])
-            if not candidates:
-                raise ValueError(f"Colour '{colour}' is missing a required {tile_type.value} tile")
-            candidates = sorted(candidates, key=lambda tile: tile.id)
-            return candidates[0]
-
-        def _task_id(tile: Tile, tile_type: TileType, assigned_colour: Optional[str]) -> str:
-            colour_key = assigned_colour or "neutral"
-            return f"{tile.id}:{tile_type.value}:{colour_key}"
-
-        def _create_task(tile: Tile, task_type: TileType, colour: str, dependencies: Optional[List[str]] = None) -> Task:
+        # Helper to create and register a task
+        def create_task(tile: Tile, task_type: TileType, colour: str, 
+                       dependencies: Optional[List[str]] = None) -> Task:
             task = Task(
-                id=_task_id(tile, task_type, colour),
+                id=f"{tile.id}:{task_type.value}:{colour}",
                 tile_id=tile.id,
                 task_type=task_type,
                 colour=colour,
@@ -226,17 +188,19 @@ class TaskManager:
             for tile in colour_tiles:
                 tiles_by_type.setdefault(tile.tile_type, []).append(tile)
 
-            # Create tasks with dependencies where needed
-            monster_task = _create_task(_pick_single_tile(tiles_by_type, TileType.MONSTER, colour), TileType.MONSTER, colour)
-            offering_task = _create_task(_pick_single_tile(tiles_by_type, TileType.OFFERING, colour), TileType.OFFERING, colour)
-            statue_source_task = _create_task(_pick_single_tile(tiles_by_type, TileType.STATUE_SOURCE, colour), TileType.STATUE_SOURCE, colour)
-            
-            statue_island_candidates = sorted(tiles_by_type.get(TileType.STATUE_ISLAND, []), key=lambda t: t.id)
-            if not statue_island_candidates:
-                raise ValueError(f"Colour '{colour}' is missing a statue island to deliver to")
-            
-            statue_island_task = _create_task(statue_island_candidates[0], TileType.STATUE_ISLAND, colour, [statue_source_task.id])
-            temple_task = _create_task(_pick_single_tile(tiles_by_type, TileType.TEMPLE, colour), TileType.TEMPLE, colour, [offering_task.id])
+            # Pick first tile (sorted by ID) for each type
+            def pick_tile(tile_type: TileType) -> Tile:
+                candidates = sorted(tiles_by_type.get(tile_type, []), key=lambda t: t.id)
+                if not candidates:
+                    raise ValueError(f"Colour '{colour}' is missing {tile_type.value} tile")
+                return candidates[0]
+
+            # Create all tasks for this colour in dependency order
+            monster_task = create_task(pick_tile(TileType.MONSTER), TileType.MONSTER, colour)
+            offering_task = create_task(pick_tile(TileType.OFFERING), TileType.OFFERING, colour)
+            statue_source_task = create_task(pick_tile(TileType.STATUE_SOURCE), TileType.STATUE_SOURCE, colour)
+            statue_island_task = create_task(pick_tile(TileType.STATUE_ISLAND), TileType.STATUE_ISLAND, colour, [statue_source_task.id])
+            temple_task = create_task(pick_tile(TileType.TEMPLE), TileType.TEMPLE, colour, [offering_task.id])
             
             selected_tasks[colour] = [monster_task, offering_task, statue_source_task, statue_island_task, temple_task]
 
@@ -289,37 +253,34 @@ class TaskManager:
         
     def execute_task(self, task: Task, player_state: PlayerState) -> bool:
         """Execute a task and update game state."""
-        if task.remaining_uses() <= 0:
-            return False
-
-        if not task.can_execute(player_state.completed_task_ids):
+        if task.remaining_uses() <= 0 or not task.can_execute(player_state.completed_task_ids):
             return False
             
         # Check if player is adjacent to task tile
         task_tile = self.grid.get_tile(task.tile_id)
-        if not task_tile:
-            return False
-            
         current_tile = self.grid.get_tile(player_state.current_tile_id)
-        if not current_tile or task.tile_id not in current_tile.neighbors:
+        if not task_tile or not current_tile or task.tile_id not in current_tile.neighbors:
             return False
             
         # Check specific task requirements
-        if task.task_type == TileType.STATUE_SOURCE:
-            if player_state.cargo_full():
-                return False
-            # Ensure the statue colour is supported by the tile definition.
-            if task.colour and task.colour not in task_tile.colours:
-                return False
-        elif task.task_type == TileType.STATUE_ISLAND:
-            if not player_state.can_deliver_statue(task.colour):
-                return False
-        elif task.task_type == TileType.OFFERING:
-            if player_state.cargo_full():
-                return False
-        elif task.task_type == TileType.TEMPLE:
-            if not player_state.can_deliver_offerings(task.colour):
-                return False
+        cargo_required = {
+            TileType.STATUE_SOURCE: None,  # Pickup - needs space
+            TileType.OFFERING: None,       # Pickup - needs space
+            TileType.STATUE_ISLAND: (STATUE_ITEM, task.colour),
+            TileType.TEMPLE: (OFFERING_ITEM, task.colour),
+        }
+        
+        if task.task_type in cargo_required:
+            requirement = cargo_required[task.task_type]
+            if requirement is None:  # Pickup tasks
+                if len(player_state.cargo) >= PlayerState.CARGO_CAPACITY:
+                    return False
+                if task.colour and task.colour not in task_tile.colours:
+                    return False
+            else:  # Delivery tasks
+                item_type, colour = requirement
+                if not player_state.has_item(item_type, colour):
+                    return False
                 
         # Execute the task
         player_state.complete_task(task)
@@ -339,8 +300,3 @@ class TaskManager:
                 if task.status == status
             )
         return summary
-        
-    def __str__(self) -> str:
-        """String representation of task manager."""
-        summary = self.get_task_summary()
-        return f"TaskManager: {len(self.tasks)} tasks, {summary}"

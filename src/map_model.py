@@ -32,10 +32,6 @@ class Tile:
         """Check if this tile is water (traversable)."""
         return self.tile_type == TileType.WATER
 
-    def is_task_tile(self) -> bool:
-        """Check if this tile is a task tile (land)."""
-        return self.tile_type != TileType.WATER
-
     def to_dict(self, include_neighbors: bool = True) -> Dict:
         """Convert tile to dictionary for JSON serialization."""
         data = {
@@ -81,7 +77,7 @@ class HexGrid:
         
     def get_task_tiles(self) -> List[Tile]:
         """Get all task tiles (land)."""
-        return [tile for tile in self.tiles.values() if tile.is_task_tile()]
+        return [tile for tile in self.tiles.values() if not tile.is_water()]
         
     def get_tiles_by_type(self, tile_type: TileType) -> List[Tile]:
         """Get all tiles of a specific type."""
@@ -133,19 +129,16 @@ class HexGrid:
         # Check that all water tiles are connected
         water_tiles = {tile.id for tile in self.get_water_tiles()}
         if water_tiles:
-            connected = set()
-            stack = [next(iter(water_tiles))]
+            connected = {next(iter(water_tiles))}
+            stack = list(connected)
             
             while stack:
                 current_id = stack.pop()
-                if current_id in connected:
-                    continue
-                connected.add(current_id)
-                
                 current_tile = self.get_tile(current_id)
                 if current_tile:
                     for neighbor_id in current_tile.neighbors:
                         if neighbor_id in water_tiles and neighbor_id not in connected:
+                            connected.add(neighbor_id)
                             stack.append(neighbor_id)
                             
             if len(connected) != len(water_tiles):
@@ -258,26 +251,17 @@ class HexGrid:
 
     def recompute_neighbors_from_coords(self) -> None:
         """Rebuild neighbor lists based solely on stored coordinates."""
-        coord_to_id = {
-            tuple(tile.coords): tile_id
-            for tile_id, tile in self.tiles.items()
-        }
-
+        coord_to_id = {tuple(tile.coords): tile_id for tile_id, tile in self.tiles.items()}
         even_row_offsets = [(-1, 0), (1, 0), (-1, -1), (0, -1), (-1, 1), (0, 1)]
         odd_row_offsets = [(-1, 0), (1, 0), (0, -1), (1, -1), (0, 1), (1, 1)]
 
         for tile in self.tiles.values():
             col, row = tile.coords
             offsets = even_row_offsets if row % 2 == 0 else odd_row_offsets
-            neighbors: List[str] = []
-
-            for dx, dy in offsets:
-                neighbor_coords = (col + dx, row + dy)
-                neighbor_id = coord_to_id.get(neighbor_coords)
-                if neighbor_id:
-                    neighbors.append(neighbor_id)
-
-            tile.neighbors = sorted(neighbors)
+            tile.neighbors = sorted([
+                neighbor_id for dx, dy in offsets
+                if (neighbor_id := coord_to_id.get((col + dx, row + dy)))
+            ])
         
     def __str__(self) -> str:
         """String representation of the grid."""

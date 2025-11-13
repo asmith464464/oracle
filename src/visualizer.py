@@ -368,10 +368,11 @@ class HexGridVisualizer:
             3: [(-0.16, -0.20), (0.16, -0.20), (0.0, -0.06)],
         }
 
-        dots = positions.get(len(valid_colours), [
-            (0.3 * math.cos(2 * math.pi * i / len(valid_colours)), 0.3 * math.sin(2 * math.pi * i / len(valid_colours)) - 0.1)
+        dots = positions.get(len(valid_colours)) or [
+            (0.3 * math.cos(2 * math.pi * i / len(valid_colours)), 
+             0.3 * math.sin(2 * math.pi * i / len(valid_colours)) - 0.1)
             for i in range(len(valid_colours))
-        ])
+        ]
 
         for (offset_x, offset_y), colour in zip(dots, valid_colours):
             ax.add_patch(Circle(
