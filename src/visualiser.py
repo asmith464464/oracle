@@ -1,4 +1,4 @@
-"""Minimal hex-grid visualisation helpers built on hexalattice."""
+"""Hex-grid visualisation for map1.json with hardcoded tile positions."""
 
 from __future__ import annotations
 
@@ -7,11 +7,25 @@ from typing import Iterable, Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.patheffects as patheffects
-from hexalattice.hexalattice import plot_single_lattice_custom_colors  # External library uses American spelling
+from hexalattice.hexalattice import plot_single_lattice_custom_colors
 from matplotlib.patches import Circle, Polygon
 import math
 
-from .map_model import HexGrid, Tile, TileType
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+
+from .grid import HexGrid, Tile, TileType
+
+# Hex layout constants for visualization
+HEX_MIN_DIAMETER = 0.9
+HEX_COLUMN_SPACING = 1.15
+
+
+def calculate_tile_position(col: int, row: int) -> tuple[float, float]:
+    """Calculate (x, y) position for a hex tile from its axial coordinates."""
+    x = col * HEX_COLUMN_SPACING + (row % 2) * (HEX_COLUMN_SPACING / 2)
+    y = row * HEX_MIN_DIAMETER
+    return (x, y)
 
 BASE_COLOURS = {
     TileType.WATER.value: "#B7C9E2",
@@ -63,9 +77,10 @@ class HexGridVisualiser:
 
     def __init__(self, grid: HexGrid, min_diameter: float = 0.9) -> None:
         self.grid = grid
-        self.min_diameter = max(0.4, min_diameter)
+        self.min_diameter = 0.9  # Hardcoded for map1.json
         self.tile_ids = list(grid.tiles)
-        centres = [self._hex_to_pixel(grid.tiles[t].coords) for t in self.tile_ids]
+        # Calculate positions from tile coordinates
+        centres = [calculate_tile_position(*tile.coords) for tile_id in self.tile_ids if (tile := self.grid.get_tile(tile_id))]
         self.centres = np.array(centres, dtype=float) if centres else np.empty((0, 2))
         self.id_to_index = {tile_id: idx for idx, tile_id in enumerate(self.tile_ids)}
 
@@ -80,7 +95,6 @@ class HexGridVisualiser:
         highlight_colours: Iterable[str] | None,
     ) -> None:
         figures = [
-            self.plot_map(highlight_colours, selected_task_tiles),
             self.plot_route(route, completed_tasks, shrines_built, selected_task_tiles, highlight_colours),
         ]
         if cycles:
@@ -93,28 +107,6 @@ class HexGridVisualiser:
         for fig in figures:
             plt.show(block=True)
             plt.close(fig)
-
-    def visualise_grid_only(self) -> None:
-        """Display just the base map without any route or validation."""
-        fig, _ = self._render_base(highlight_colours=None)
-        plt.show(block=True)
-        plt.close(fig)
-
-    def plot_map(
-        self,
-        highlight_colours: Iterable[str] | None = None,
-        selected_task_tiles: Sequence[str] | None = None,
-    ):
-        fig, ax = self._render_base(highlight_colours)
-        if selected_task_tiles:
-            self._outline_tiles(
-                ax,
-                selected_task_tiles,
-                "#2563EB",
-                linewidth=2.6,
-                alpha=0.95,
-            )
-        return fig
 
     def plot_route(
         self,
@@ -135,14 +127,19 @@ class HexGridVisualiser:
                 alpha=0.9,
             )
 
-        points = [self._centre_for(tid) for tid in (route or []) if tid in self.id_to_index]
+        points = []
+        for tid in (route or []):
+            tile = self.grid.get_tile(tid)
+            if tile:
+                points.append(calculate_tile_position(*tile.coords))
+        
         if len(points) >= 2:
             xs, ys = zip(*points)
             ax.plot(xs, ys, color="#FF6B6B", linewidth=2.0, alpha=0.85)
             ax.scatter(*points[0], color="#2ECC71", s=40, zorder=6)
             ax.scatter(*points[-1], color="#E74C3C", s=40, zorder=6)
             
-            # Draw directional arrows on route
+            # Draw step numbers on route
             if route:
                 self._draw_route_arrows(ax, route, color="#1F2933", alpha=0.8)
 
@@ -159,114 +156,114 @@ class HexGridVisualiser:
     ):
         fig, ax = self._render_base(highlight_colours)
 
+        # Compute cycle entry/exit indices from route on-demand
+        route_list = list(route)
+        
         for idx, cycle in enumerate(cycles):
-            # Use PALETTE colour for cycle visualisation
             cycle_colour = PALETTE[idx % len(PALETTE)]
             
-            # Outline task tiles in cycle colour
-            task_ids = [task.tile_id for task in getattr(cycle, "tasks", [])]
+            # Outline task tiles
+            task_ids = [task.tile_id for task in cycle.tasks]
             self._outline_tiles(ax, task_ids, cycle_colour, linewidth=2.6, alpha=0.9)
 
-            # Draw cycle route using stored internal_route with offset for overlaps
-            internal_route = getattr(cycle, "internal_route", [])
-            points = self._get_offset_points(internal_route, idx)
-            if len(points) >= 2:
-                xs, ys = zip(*points)
-                ax.plot(
-                    xs,
-                    ys,
-                    color=cycle_colour,
-                    linewidth=2.2,
-                    alpha=0.75,
-                    solid_capstyle="round",
-                    zorder=5 + idx,
-                    path_effects=[
-                        patheffects.Stroke(linewidth=3.6, foreground="white"),
-                        patheffects.Normal(),
-                    ],
-                )
+            # Draw cycle route with minimal offset to avoid overlaps
+            internal_route = cycle.internal_route
+            if len(internal_route) >= 2:
+                offset_distance = 0.08 * idx
+                angle = (idx * 60) * (math.pi / 180)
+                points = []
+                for tile_id in internal_route:
+                    tile = self.grid.get_tile(tile_id)
+                    if tile:
+                        x, y = calculate_tile_position(*tile.coords)
+                        x += offset_distance * math.cos(angle)
+                        y += offset_distance * math.sin(angle)
+                        points.append((x, y))
+                
+                if len(points) >= 2:
+                    xs, ys = zip(*points)
+                    ax.plot(
+                        xs, ys, color=cycle_colour, linewidth=2.2, alpha=0.75,
+                        solid_capstyle="round", zorder=5 + idx,
+                        path_effects=[
+                            patheffects.Stroke(linewidth=3.6, foreground="white"),
+                            patheffects.Normal(),
+                        ],
+                    )
             
-            # Draw directional arrows for this cycle
+            # Draw step numbers for this cycle
             if internal_route:
                 self._draw_route_arrows(ax, internal_route, color=cycle_colour, alpha=0.85)
 
-            anchor_tile = getattr(cycle, "center_position", None) or (task_ids[0] if task_ids else None)
-            if anchor_tile and anchor_tile in self.id_to_index:
-                cx, cy = self._centre_for(anchor_tile)
-                ax.text(
-                    cx,
-                    cy + self.min_diameter * 0.35,
-                    f"C{idx + 1}",
-                    ha="center",
-                    va="center",
-                    fontsize=8,
-                    color=cycle_colour,
-                    zorder=8,
-                    bbox=dict(boxstyle="round,pad=0.2", facecolor="white", alpha=0.85, linewidth=0),
-                )
-
-        # Draw Zeus to first cycle connector
-        if cycles and len(route) > 0:
-            first_cycle_start = getattr(cycles[0], "entry_index", 0)
-            if first_cycle_start is not None and first_cycle_start > 0:
-                connector = route[0:first_cycle_start + 1]
-                points = [self._centre_for(tid) for tid in connector if tid in self.id_to_index]
-                if len(points) >= 2:
-                    xs, ys = zip(*points)
-                    ax.plot(
-                        xs, ys,
-                        color="#2C3E50",
-                        linewidth=1.5,
-                        linestyle=(0, (3, 4)),
-                        alpha=0.6,
-                        zorder=3,
-                        path_effects=[
-                            patheffects.Stroke(linewidth=3.0, foreground="white", alpha=0.8),
-                            patheffects.Normal(),
-                        ],
+            # Label cycle
+            anchor_tile = task_ids[0] if task_ids else None
+            if anchor_tile:
+                tile = self.grid.get_tile(anchor_tile)
+                if tile:
+                    cx, cy = calculate_tile_position(*tile.coords)
+                    ax.text(
+                        cx, cy + self.min_diameter * 0.35, f"C{idx + 1}",
+                        ha="center", va="center", fontsize=8, color=cycle_colour, zorder=8,
+                        bbox=dict(boxstyle="round,pad=0.2", facecolor="white", alpha=0.85, linewidth=0),
                     )
+
+        # Mark which route indices are covered by cycles
+        # Build a map of which route indices belong to which cycles
+        route_to_cycles = {}  # route_index -> list of cycle indices
         
-        # Draw connectors between cycles using stored connector_to_next
-        for idx in range(len(cycles) - 1):
-            connector = getattr(cycles[idx], "connector_to_next", [])
-            points = [self._centre_for(tid) for tid in connector if tid in self.id_to_index]
-            
+        for cycle_idx, cycle in enumerate(cycles):
+            if not cycle.internal_route:
+                continue
+            try:
+                # Find where this cycle's route appears in the full route
+                entry_tile = cycle.internal_route[0]
+                entry_route_idx = route_list.index(entry_tile)
+                
+                # Map each tile in the cycle's internal route to route indices
+                for i, tile_id in enumerate(cycle.internal_route):
+                    # Find this tile in the route starting from entry point
+                    search_from = entry_route_idx
+                    try:
+                        route_idx = route_list.index(tile_id, search_from)
+                        if route_idx not in route_to_cycles:
+                            route_to_cycles[route_idx] = []
+                        route_to_cycles[route_idx].append(cycle_idx)
+                    except ValueError:
+                        pass
+            except ValueError:
+                pass
+        
+        covered_indices = set(route_to_cycles.keys())
+        
+        # Draw connectors for uncovered segments
+        connector_segments = []
+        current_segment = []
+        
+        for i, tile_id in enumerate(route_list):
+            if i not in covered_indices:
+                current_segment.append(tile_id)
+            else:
+                if len(current_segment) > 1:
+                    connector_segments.append(current_segment)
+                current_segment = []
+        
+        # Don't forget the last segment
+        if len(current_segment) > 1:
+            connector_segments.append(current_segment)
+        
+        # Draw all connector segments as dotted lines
+        for segment in connector_segments:
+            points = []
+            for tid in segment:
+                tile = self.grid.get_tile(tid)
+                if tile:
+                    points.append(calculate_tile_position(*tile.coords))
             if len(points) >= 2:
                 xs, ys = zip(*points)
                 ax.plot(
-                    xs,
-                    ys,
-                    color="#2C3E50",
-                    linewidth=1.5,
-                    linestyle=(0, (3, 4)),
-                    alpha=0.6,
-                    zorder=3,
-                    path_effects=[
-                        patheffects.Stroke(linewidth=3.0, foreground="white", alpha=0.8),
-                        patheffects.Normal(),
-                    ],
+                    xs, ys, color="#666666", linewidth=1.2, linestyle=(0, (4, 4)),
+                    alpha=0.5, zorder=15,
                 )
-        
-        # Draw last cycle to Zeus connector
-        if cycles and len(route) > 0:
-            last_cycle_end = getattr(cycles[-1], "exit_index", len(route) - 1)
-            if last_cycle_end is not None and last_cycle_end < len(route) - 1:
-                connector = route[last_cycle_end:len(route)]
-                points = [self._centre_for(tid) for tid in connector if tid in self.id_to_index]
-                if len(points) >= 2:
-                    xs, ys = zip(*points)
-                    ax.plot(
-                        xs, ys,
-                        color="#2C3E50",
-                        linewidth=1.5,
-                        linestyle=(0, (3, 4)),
-                        alpha=0.6,
-                        zorder=3,
-                        path_effects=[
-                            patheffects.Stroke(linewidth=3.0, foreground="white", alpha=0.8),
-                            patheffects.Normal(),
-                        ],
-                    )
 
         return fig
 
@@ -357,27 +354,25 @@ class HexGridVisualiser:
         return fig, ax
 
     def _draw_colour_markers(self, ax, centre: tuple[float, float], colours: Sequence[str]) -> None:
-        valid_colours = [PLAYER_COLOURS.get(colour, "#2C3E50") for colour in colours]
-        if not valid_colours:
+        if not colours:
             return
-
+        
+        # Hardcoded positions for 1-3 colours (map1.json has max 3)
+        positions = [(0.0, -0.20), (-0.14, -0.20), (0.14, -0.20)]
         radius = self.min_diameter * 0.065
-        positions = {
-            1: [(0.0, -0.20)],
-            2: [(-0.14, -0.20), (0.14, -0.20)],
-            3: [(-0.16, -0.20), (0.16, -0.20), (0.0, -0.06)],
-        }
-
-        dots = positions.get(len(valid_colours)) or [
-            (0.3 * math.cos(2 * math.pi * i / len(valid_colours)), 
-             0.3 * math.sin(2 * math.pi * i / len(valid_colours)) - 0.1)
-            for i in range(len(valid_colours))
-        ]
-
-        for (offset_x, offset_y), colour in zip(dots, valid_colours):
+        
+        for i, colour in enumerate(colours[:3]):
+            if i == 0 and len(colours) == 1:
+                offset = (0.0, -0.20)
+            elif i < 2:
+                offset = ((-0.14, -0.20), (0.14, -0.20))[i]
+            else:
+                offset = (0.0, -0.06)
+            
+            colour_hex = PLAYER_COLOURS.get(colour, "#2C3E50")
             ax.add_patch(Circle(
-                (centre[0] + offset_x * self.min_diameter, centre[1] + offset_y * self.min_diameter),
-                radius, facecolor=colour, edgecolor="#1F2933", linewidth=0.4, zorder=7.6
+                (centre[0] + offset[0] * self.min_diameter, centre[1] + offset[1] * self.min_diameter),
+                radius, facecolor=colour_hex, edgecolor="#1F2933", linewidth=0.4, zorder=7.6
             ))
 
     def _draw_tile_key(self, ax) -> None:
@@ -427,78 +422,29 @@ class HexGridVisualiser:
             )
             ax.add_patch(patch)
 
-    def _centre_for(self, tile_id: str) -> tuple[float, float]:
-        return tuple(self.centres[self.id_to_index[tile_id]])
+
     
-    def _get_offset_points(self, route: Sequence[str], cycle_idx: int) -> list[tuple[float, float]]:
-        """Get route points with small offset to avoid overlapping lines."""
-        points = []
-        offset_distance = 0.08 * cycle_idx  # Small offset based on cycle index
-        
-        for tile_id in route:
-            if tile_id not in self.id_to_index:
-                continue
-            x, y = self._centre_for(tile_id)
-            # Apply circular offset based on cycle index
-            angle = (cycle_idx * 60) * (math.pi / 180)  # 60 degrees per cycle
-            x_offset = offset_distance * math.cos(angle)
-            y_offset = offset_distance * math.sin(angle)
-            points.append((x + x_offset, y + y_offset))
-        
-        return points
+
 
     def _draw_route_arrows(self, ax, route: Sequence[str], color: str = "#1F2933", alpha: float = 0.7) -> None:
         """Draw sequential step numbers on route tiles."""
-        # Track which tiles are visited and at which steps
-        tile_steps = {}  # tile_id -> list of step numbers
-        
+        seen = set()
         for i, tile_id in enumerate(route):
-            if tile_id not in self.id_to_index:
+            if tile_id in seen:
+                continue
+            seen.add(tile_id)
+            
+            tile = self.grid.get_tile(tile_id)
+            if not tile:
                 continue
             
-            step_num = i + 1  # 1-indexed
-            if tile_id not in tile_steps:
-                tile_steps[tile_id] = []
-            tile_steps[tile_id].append(step_num)
-        
-        # Draw step numbers on tiles
-        for tile_id, steps in tile_steps.items():
-            idx = self.id_to_index[tile_id]
-            cx, cy = self.centres[idx]
-            
-            # If tile visited multiple times, show all step numbers
-            if len(steps) > 1:
-                # Show first few steps if many visits
-                if len(steps) <= 3:
-                    label = ",".join(str(s) for s in steps)
-                else:
-                    label = f"{steps[0]},{steps[1]}..."
-                fontsize = 7
-            else:
-                label = str(steps[0])
-                fontsize = 8
-            
+            cx, cy = calculate_tile_position(*tile.coords)
             ax.text(
-                cx,
-                cy,
-                label,
-                ha="center",
-                va="center",
-                fontsize=fontsize,
-                color=color,
-                alpha=alpha,
-                weight="bold",
-                zorder=7.5,
+                cx, cy, str(i + 1),
+                ha="center", va="center", fontsize=8,
+                color=color, alpha=alpha, weight="bold", zorder=7.5,
                 bbox=dict(boxstyle="round,pad=0.15", facecolor="white", alpha=0.7, linewidth=0),
             )
-
-    def _hex_to_pixel(self, coord) -> tuple[float, float]:
-        col, row = coord
-        parity = row & 1
-        column_spacing = 1.15  # widen columns slightly so borders are visible
-        x = self.min_diameter * column_spacing * (col + 0.5 * parity)
-        y = self.min_diameter * row
-        return float(x), float(y)
 
 def tile_label(tile: Tile, zeus_id: str) -> str:
     if tile.id == zeus_id:

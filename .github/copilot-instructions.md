@@ -1,282 +1,186 @@
-# Oracle Heuristic Route Planner - AI Agent GuidelinesPurpose
+﻿# Oracle Route Planner - Hardcoded for map1.json
 
+## Core Purpose
 
+Solve the Oracle boating puzzle for **map1.json only** with hardcoded colours **pink, blue, green**. This is a streamlined, single-map solver optimized for simplicity and understandability.
 
-## Core PurposeSolve the Oracle boating puzzle under the “three colours, three shrines” brief while keeping the heuristic code lean and modular.
+## The Challenge
 
+Complete 15 tasks across 3 colours (5 tasks per colour) on a fixed hex-grid map:
+- **Pink tasks**: Monster at tile_020, Offering at tile_053, Statue from tile_071, Deliver to island tile_063, Offer at temple tile_112
+- **Blue tasks**: Monster at tile_028, Offering at tile_077, Statue from tile_061, Deliver to island tile_094, Offer at temple tile_015
+- **Green tasks**: Monster at tile_105, Offering at tile_009, Statue from tile_108, Deliver to island tile_005, Offer at temple tile_007
 
+Additional objectives:
+- Build 3 shrines (any of the available shrine tiles)
+- Return to Zeus tile (tile_043)
 
-Solve the "Oracle boating puzzle" by computing optimal hex-grid routes that complete colour-specific tasks while building shrines opportunistically. The system uses cycle-based geographic clustering to minimize travel turns.Scenario Rules
-
-
-
-## Architecture Overview- Exactly three colours are selected per run from `pink`, `blue`, `green`, `red`, `black`, `yellow`. In each map there should be enough representation across the tiles to be able to complete tasks for any 3 of the 6 colours.
-
-- For each colour there should be: 2 different monster tiles, 2 different offerings, 3 different statue islands, only one temple, only one statue source tile that you can visit. For shrines, colour is irrelevant, you can build a shrine on any colour shrine tile.
-
-### Pipeline Flow- For each of the 3 chosen colours, must complete the following tasks: 1 monster to defeat, 1 offering to collect, 1 statue to load, 1 statue island to deliver to, and 1 temple for the offering delivery. Extra tiles of the same type exist but only one needs to be visited for the assigned colour.
-
-```- Tiles can belong to multiple colours. A task is valid only when its colour appears in the tile's `colours` list. Statue islands are always 3 colours, offerings are always 2 colours, monsters can be either 1 or 2 colours.
-
-HexGrid → TaskManager → CycleHeuristic → ShrineOptimizer → RouteSimulator → Visualizer- Exact tile distribution for all 6 colours:
-
-  (map)     (selection)    (routing)      (insertion)        (validation)     (optional)  - Monster tiles: 9 total (6 with 1 colour, 3 with 2 colours) = 2 available per colour
-
-```  - Offering tiles: 6 total (each with exactly 2 colours) = 2 available per colour
-
-  - Statue source tiles: 6 total (each with exactly 1 colour) = 1 per colour
-
-**Critical separation**: Heuristic generates routes purely from spatial/dependency constraints. Simulator validates legality and tracks state changes. Visualizer consumes output without influencing decisions.  - Temple tiles: 6 total (each with exactly 1 colour) = 1 per colour
-
-  - Statue island tiles: 6 total (each with exactly 3 colours) = 3 available per colour
-
-### Core Components  - Shrine tiles: 3 total (no colours)
-
-  - Zeus tile: 1 (starting/ending position, no tasks)
-
-- **`HexGrid`** (`map_model.py`): Graph of hex tiles with `Tile` nodes (water=traversable, land=tasks). Each tile has `coords`, `tile_type`, `colours` tuple, and `neighbors` list. Zeus tile marks start/end.- The boat moves exclusively on water hexes, up to three steps per turn, and interacts with adjacent land tiles.
-
-- The ship carries at most two cargo items (statues or offerings). Task sequencing must respect this capacity.
-
-- **`TaskManager`** (`tasks.py`): Selects exactly one tile per required task type per colour. Tracks dependencies (e.g., statue pickup before delivery), cargo state via `PlayerState`, and shrine requirements.- Core objectives: defeat three monsters, deliver three statues, deliver three offerings, build three shrines (any colour shrine tiles), and finish back at the Zeus tile.
-
-
-
-- **`CycleHeuristic`** (`heuristic.py`): Clusters tasks by hex-coordinate proximity into `TaskCycle` objects. Uses `CYCLE_DISTANCE_THRESHOLD=6` and `MAX_CYCLE_TASKS=5` for balanced spatial grouping. Connects cycles with shortest paths. Ignores cargo during clustering for clean separation.Cycle Planning Heuristic
-
-
-
-- **`ShrineOptimizer`** (`shrine_optimizer.py`): Post-processes routes to insert shrines during wasted moves (when <3 moves remain in turn). Delegates logic to `shrine_logic.py` functions.- `TaskManager` pre-selects the required tasks for the chosen colours and tracks dependencies.
-
-- `CycleHeuristic` builds localized **cycles**: it anchors on the first task in a cycle and only adds further tasks whose water-access distance stays within the cycle distance threshold and whose execution is feasible for the current cargo state.
-
-- **`RouteSimulator`** (`simulator.py`): Step-by-step route execution. Validates moves are adjacent water tiles, executes tasks when adjacent to land tiles, enforces cargo capacity (max 2 items), and confirms all objectives met.- When the next candidate lies beyond the threshold or the cycle reaches the task cap, the cycle closes and a new one begins. Single-task cycles are acceptable when tasks are isolated.
-
-- Cycles connect via longer legs; connectors should not overlap visually with the cycle’s internal path.
-
-- **`DistanceCalculator`** (`distance_utils.py`): Cached A* pathfinding on water tiles using NetworkX. All route planning uses this—never Manhattan distance for actual paths.
-
-Visualization Expectations
-
-### Data Flow Patterns
-
-- Visual outputs must never influence heuristic choices. They consume the solved data only.
-
-1. **Task Selection**: `TaskManager.select_tasks_for_colours()` deterministically picks first tile (sorted by ID) for each task type per colour.- Multi-colour tiles show segmented borders coloured per tile `colours` entry. Cycle connectors render as dotted lines with a contrasting outline to avoid blending with the main route.
-
-- The solver must function without any graphical output.
-
-2. **Cycle Formation**: `CycleHeuristic._cluster_tasks_by_proximity()` uses k-means-like spatial clustering on hex coordinates, then `_build_route_with_cycles()` visits tasks within each cluster greedily by distance.
-
-Development Principles
-
-3. **Multi-colour Tiles**: Tasks exist per colour on a tile. Visiting a tile completes all its tasks simultaneously (see `_build_route_with_cycles` where `tasks_by_tile` aggregates all tasks).
-
-1. Keep heuristic logic separate from data loading, simulation, and rendering utilities. Avoid circular dependencies and shared mutable globals.
-
-4. **Route Repair**: `repair_route()` fixes non-adjacent moves by inserting shortest paths. Called after cycle formation and after shrine insertion.2. Prefer straightforward, declarative code. Reuse existing helpers instead of reimplementing standard-library behaviour.
-
-3. Keep functions short and purposeful with descriptive names and minimal parameters. Document intent with concise docstrings and targeted inline comments.
-
-## Scenario Rules4. Implement changes incrementally; optimise only when a proven need arises.
-
-5. Ensure the entire system (heuristic + simulator) runs headless, including shrine placement, reporting, and exports.
-### Tile Distribution (All 6 Colours)
-- **Monster tiles**: 9 total (6 with 1 colour, 3 with 2 colours) = 2 available per colour
-- **Offering tiles**: 6 total (each with exactly 2 colours) = 2 available per colour
-- **Statue source tiles**: 6 total (each with exactly 1 colour) = 1 per colour
-- **Temple tiles**: 6 total (each with exactly 1 colour) = 1 per colour
-- **Statue island tiles**: 6 total (each with exactly 3 colours) = 3 available per colour
-- **Shrine tiles**: 3 total (no colours—any can be used)
-- **Zeus tile**: 1 (starting/ending position, no tasks)
-
-### Per-Run Requirements (3 Selected Colours)
-For each chosen colour, complete:
-1. Defeat 1 monster (pick from 2 available tiles)
-2. Collect 1 offering (pick from 2 available tiles)
-3. Pick up 1 statue from statue source (only 1 tile available)
-4. Deliver statue to 1 statue island (pick from 3 available)
-5. Deliver offering to 1 temple (only 1 tile available)
-
-Plus: Build 3 shrines (any of the 3 shrine tiles) and return to Zeus.
-
-### Movement & Cargo
-- Boat moves on water tiles only, up to 3 moves per turn
+Boat movement:
+- Travels on water tiles only, up to 3 moves per turn
+- Cargo capacity: 2 items (statues or offerings)
 - Tasks execute when adjacent to land tiles
-- Cargo capacity: 2 items max (statues or offerings)
-- Dependencies: must pick up before delivering
 
-## Development Workflows
+## Architecture
 
-### Running the System
+### Hardcoded Components
+
+**Map**: `data/maps/map1.json` - fixed 118-tile map with Zeus at tile_043
+
+**Colours**: `["pink", "blue", "green"]` - no other colour combinations supported
+
+**Task Selection** (`tasks.py`): Hardcoded tile IDs for all 15 tasks (5 per colour)
+
+**Clustering** (`cycle_clustering.py`): Precomputed 4 geographic clusters:
+1. Northwest: Green monster/offering/statue/temple (tiles 105, 009, 108, 007)
+2. West/Center: Pink tasks (tiles 020, 053, 071, 063, 112)
+3. East: Blue tasks (tiles 028, 077, 061, 094, 015)
+4. North: Green statue island (tile 005)
+
+**Validation** (`map_model.py`): Simple existence check for 15 required tiles + Zeus + 3 shrines
+
+### Pipeline
+
+```
+load map1.json  assign red/blue/green  select 15 tasks  cluster into 4 groups  
+route through clusters  insert shrines  simulate  visualize (optional)
+```
+
+**Key files**:
+- `main.py` - Entry point with 3 args: --visualize, --max-shrines, --save-results
+- `tasks.py` - Hardcoded task definitions and cargo management
+- `cycle_clustering.py` - Fixed 4-cluster structure
+- `heuristic.py` - Routes through clusters greedily
+- `simulator.py` - Validates moves and task execution
+- `map_model.py` - Tile graph and basic validation
+
+### What Was Removed
+
+- Map generation code (~140 lines from `utils.py`)
+- Random colour selection
+- Dynamic clustering algorithms (k-means)
+- Generic grid validation
+- Command-line arguments for maps/colours/seeds/cycles
+- Support for arbitrary tile distributions
+- Files: `debug_tasks.py`, `example_map.json`, `map2.json`
+
+## Development Workflow
+
+### Running
+
 ```powershell
-# Standard run with visualization
-python main.py --generate-map --seed 42 --visualize
+# Basic run
+python main.py
 
-# Custom colours (must have required tiles)
-python main.py --colours red blue green --seed 42
+# With visualization
+python main.py --visualize
 
-# Custom cycles (override clustering heuristic)
-python main.py --cycles-file test_cycles.json
+# Custom shrine count
+python main.py --max-shrines 5
 
-# Save results for analysis
-python main.py --seed 42 --save-results output.json
+# Save results
+python main.py --save-results output.json
 ```
 
-### Map Generation
-Use `create_example_map()` in `utils.py` to generate valid maps. Ensures:
-- Correct tile distribution per colour (see counts above)
-- Water connectivity via graph traversal
-- Task accessibility via `ensure_task_accessibility()` (every land tile has ≥1 adjacent water)
+### Testing Changes
 
-Validation: `HexGrid.validate_grid()` returns list of issues or empty list if valid.
+After modifying heuristic or routing code:
+1. Run `python main.py --visualize` to see route visually
+2. Check console output for total moves/turns
+3. Verify all 15 tasks + 3 shrines completed + return to Zeus
 
-### Debugging Routes
-- `RouteSimulator.simulation_result.errors` lists validation failures
-- `--visualize` shows cycle boundaries (solid) vs. connectors (dotted)
-- Check `completed_tasks` vs `selected_tasks` in results JSON
-- Verify cargo state throughout with `player_state_snapshot` in each `SimulationStep`
+### Common Tasks
 
-## Key Conventions
+**Modify clustering**: Edit `cluster_tasks()` in `cycle_clustering.py` to change tile groupings
 
-### Tile Identification
-- **Tile IDs**: Strings like `"tile_042"`. Never use integer indices.
-- **Colours**: Immutable tuples in `Tile.colours`. Check membership: `colour in tile.colours`
-- **Types**: `TileType` enum—`WATER` is traversable; others are tasks
+**Adjust routing**: See `heuristic.py` for cycle ordering and pathfinding logic
 
-### Task IDs
-Format: `"{tile_id}:{task_type}:{colour}"` (e.g., `"tile_042:monster:red"`)
-- Multi-colour tiles generate separate tasks per colour
-- Use `TaskManager.get_tasks_for_tile()` to get all tasks at a location
+**Change task assignments**: Update tile IDs in `select_tasks_for_colours()` in `tasks.py`
 
-### Pathfinding Rules
-- **For actual routes**: Always use `DistanceCalculator.get_shortest_path(from_id, to_id)` 
-- **For clustering only**: `_task_land_distance()` computes hex coordinate distance
-- Never compute routes with Manhattan distance—use A* on water graph
+**Optimize shrine placement**: See `shrine_optimizer.py` for insertion logic
 
-### Determinism
-When `--seed` is set:
-- Task selection sorts candidates by `tile.id` and picks first
-- Clustering breaks ties by smallest index
-- Colour generation uses sorted order instead of `random.sample`
+## Key Constraints
 
-### Cargo Management
-```python
-# CargoItem is immutable; PlayerState.cargo is a list
-player_state.add_cargo(CargoItem("statue", "red"))
-player_state.remove_cargo("statue", "red")  # First match removed
-player_state.cargo_full()  # True when len(cargo) == 2
-```
+### Hardcoded Assumptions
 
-## Critical Patterns
+- Map must be `map1.json` with exact tile layout
+- Colours must be pink/blue/green in that order
+- Task tiles must exist at specific IDs (see task selection in `tasks.py`)
+- Zeus tile is always `tile_043`
+- Minimum 3 shrine tiles available
 
-### Cycle vs. Connector Distinction
-```python
-# TaskCycle structure:
-cycle.internal_route      # Tiles visited within the cycle
-cycle.connector_to_next   # Path from this cycle's exit to next cycle's entry
-cycle.entry_index         # Where cycle starts in full route
-cycle.exit_index          # Where cycle ends in full route
-```
+### Task Dependencies
 
-Visualizer renders these differently (solid vs dotted) to show geographic clustering.
+- **Statue delivery** requires picking up statue first (e.g., tile_071 before tile_063 for pink)
+- **Temple offering** requires collecting offering first (e.g., tile_053 before tile_112 for pink)
+- **Monsters** have no dependencies
 
-### Route Repair Process
-After generating routes or inserting shrines, always call:
-```python
-repaired_route = repair_route(grid, distance_calc, route)
-```
+### Cargo Rules
 
-This fixes non-adjacent jumps by inserting shortest paths. Called in:
-- `CycleHeuristic.solve()` after cycle formation
-- `ShrineOptimizer.optimize_shrine_placement()` after insertion
-
-### Multi-Colour Task Execution
-When boat is adjacent to a multi-colour tile:
-```python
-# Simulator checks all tasks for that tile
-for task in task_manager.get_tasks_for_tile(neighbor_id):
-    if task.can_execute(player_state.completed_task_ids):
-        task_manager.execute_task(task, player_state)
-```
-
-All valid tasks execute in a single step.
-
-## Common Pitfalls
-
-1. **Clustering distance ≠ pathfinding distance**: Hex coordinate distance is for k-means spatial grouping only. Actual route segments use A* through water tiles.
-
-2. **Shrines modify route length**: After `ShrineOptimizer`, route may be longer. Always re-check Zeus return and re-run `repair_route()`.
-
-3. **Custom cycles must include all tasks**: When using `--cycles` or `--cycles-file`, every task tile selected by `TaskManager` must appear in exactly one cycle.
-
-4. **Tile validation before task execution**: Simulator checks `tile_id in current_tile.neighbors` and that target colour is in `tile.colours` tuple.
-
-5. **Seed affects multiple stages**: Random seed controls colour selection, map generation, and task selection. Without seed, results are non-deterministic.
+- Max 2 items in cargo
+- Statues and offerings are separate item types
+- Each item is colour-specific (pink statue ≠ blue statue)
 
 ## Code Style
 
-- Functions <50 lines with single responsibility
-- Descriptive names: `_cluster_tasks_by_proximity` not `_cluster`
-- Type hints on all public APIs: `def solve() -> Tuple[List[str], Dict]:`
-- Dataclasses for structured data (`@dataclass` for `Task`, `Tile`, `PlayerState`, etc.)
-- Validation returns `(bool, List[str])` for success + error messages
-- Avoid mutable default arguments; use `field(default_factory=list)`
+- Functions <50 lines
+- Descriptive names: `select_tasks_for_colours()` not `select()`
+- Type hints on public methods
+- Dataclasses for structured data
+- No mutable default arguments
 
-## Integration Points
+## Critical Patterns
 
-### Map I/O
+### Task Execution
+
 ```python
-# Load with automatic neighbor inference
-grid = HexGrid.from_json("map.json")
+# Tasks are defined per tile and colour
+task_id = "tile_020:monster:pink"
+tile_id = "tile_020"
+colour = "pink"
 
-# Save (optionally exclude neighbors if inferrable from coords)
-grid.to_json("output.json", include_neighbors=False)
+# Boat must be adjacent to execute
+current_tile.neighbours contains tile_id → execute task
 ```
 
-### Task Dependencies
-```python
-# Set during task creation in TaskManager.select_tasks_for_colours()
-statue_island_task = Task(
-    dependencies=[statue_source_task.id]  # Must pick up first
-)
+### Route Structure
 
-# Checked during execution
-if task.can_execute(player_state.completed_task_ids):
-    # All dependencies in completed set
+Routes are lists of tile IDs representing boat positions:
+```python
+route = ["tile_043", "tile_042", "tile_041", ...]  # Zeus  task tiles  Zeus
 ```
 
-### Simulation Output
-```python
-result = simulator.simulate_route(route, shrine_positions)
-# result.success: bool
-# result.errors: List[str]
-# result.steps: List[SimulationStep] with action_type in ['move', 'task', 'shrine', 'error']
-# result.final_player_state: PlayerState with cargo, completed_task_ids, etc.
-```
+Simulator steps through route, executing adjacent tasks and tracking cargo state.
 
-### Statistics & Metrics
-Results include:
-- `total_moves` / `total_turns` (turns = ceil(moves / 3))
-- `cycles_formed`, `tasks_per_cycle`, `cycle_distances`
-- `efficiency_metrics`: moves/turn ratio, task density, etc.
+### Shrine Insertion
+
+Shrines insert during "wasted moves" (when <3 moves remain in a turn). `ShrineOptimizer` scans route for opportunities and modifies in-place.
+
+## Troubleshooting
+
+**"Missing required tile"**: map1.json may be corrupted - restore from git
+
+**"Insufficient colours"**: Code expects exactly pink/blue/green - check `COLOURS` in `main.py`
+
+**Route validation failures**: Check simulator output for which move/task failed
+
+**Import errors**: Ensure running from project root with proper Python path
 
 ## Project Structure
+
 ```
+data/maps/map1.json          # The only map
+main.py                      # Entry point (hardcoded)
 src/
-├── map_model.py          # HexGrid, Tile, TileType
-├── tasks.py              # TaskManager, Task, PlayerState, CargoItem
-├── heuristic.py          # CycleHeuristic (main route planning)
-├── heuristic_models.py   # TaskCycle dataclass
-├── distance_utils.py     # DistanceCalculator (A* pathfinding)
-├── route_utils.py        # repair_route, append_path
-├── shrine_optimizer.py   # ShrineOptimizer (coordinator)
-├── shrine_logic.py       # Shrine insertion algorithms
-├── shrine_models.py      # ShrineOpportunity dataclass
-├── simulator.py          # RouteSimulator, validation
-├── simulator_models.py   # SimulationResult, SimulationStep
-├── visualizer.py         # HexGridVisualizer (optional)
-└── utils.py              # Map generation, logging, helpers
+  tasks.py                   # Hardcoded task selection
+  cycle_clustering.py        # Fixed 4 clusters
+  heuristic.py               # Cycle routing
+  map_model.py               # Tile graph + validation
+  simulator.py               # Move/task validation
+  distance_utils.py          # A* pathfinding
+  route_utils.py             # Path repair utilities
+  shrine_optimizer.py        # Shrine insertion
+  utils.py                   # Logging, JSON I/O
+  visualizer.py              # Optional display
 ```
 
-`main.py` orchestrates the full pipeline. Modify heuristics in `heuristic.py`, task logic in `tasks.py`, or shrine insertion in `shrine_logic.py`.
+**Everything now assumes map1.json and pink/blue/green**. No generalization, no dynamic selection, maximum simplicity.

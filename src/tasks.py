@@ -2,15 +2,23 @@
 Task and player state classes, task selection, and dependency management.
 """
 
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 
-from .map_model import Tile, TileType, HexGrid
+from .grid import Tile, TileType, HexGrid
+from .cycles import CYCLE_DEFINITIONS
 
 
 STATUE_ITEM = "statue"
 OFFERING_ITEM = "offering"
+
+# Hardcoded shrine tiles for map1.json
+MAP1_SHRINE_TILES = [
+    "tile_003", "tile_016", "tile_023", "tile_029", "tile_050",
+    "tile_058", "tile_076", "tile_079", "tile_084", "tile_091",
+    "tile_096", "tile_103"
+]
 
 __all__ = [
     "STATUE_ITEM",
@@ -20,6 +28,7 @@ __all__ = [
     "CargoItem",
     "PlayerState",
     "TaskManager",
+    "TaskCycle",
 ]
 
 
@@ -27,8 +36,6 @@ class TaskStatus(Enum):
     """Status of a task."""
     PENDING = "pending"
     COMPLETED = "completed"
-    AVAILABLE = "available"
-    BLOCKED = "blocked"
 
 
 @dataclass
@@ -41,32 +48,18 @@ class Task:
     colour: Optional[str] = None
     status: TaskStatus = TaskStatus.PENDING
     dependencies: List[str] = field(default_factory=list)
-    max_uses: int = 1
-    uses_completed: int = 0
     
     def can_execute(self, completed_tasks: Set[str]) -> bool:
         """Check if task can be executed given completed tasks."""
         return all(dep_id in completed_tasks for dep_id in self.dependencies)
 
-    def remaining_uses(self) -> int:
-        """Number of times this task can still be executed."""
-        return self.max_uses - self.uses_completed
-
-    def record_execution(self) -> None:
-        """Update internal counters after a successful execution."""
-        self.uses_completed += 1
-        if self.remaining_uses() <= 0:
-            self.status = TaskStatus.COMPLETED
-        else:
-            self.status = TaskStatus.PENDING
+    def mark_completed(self) -> None:
+        """Mark task as completed."""
+        self.status = TaskStatus.COMPLETED
 
 
-@dataclass(frozen=True)
-class CargoItem:
-    """Represents an item stored in the ship's cargo slots."""
-
-    item_type: str
-    colour: Optional[str] = None
+# CargoItem is a tuple: (item_type: str, colour: Optional[str])
+CargoItem = Tuple[str, Optional[str]]
 
 
 @dataclass 
@@ -77,7 +70,7 @@ class PlayerState:
     total_turns: int = 0
     
     # Inventory and progress tracking
-    cargo: List[CargoItem] = field(default_factory=list)
+    cargo: List[Tuple[str, Optional[str]]] = field(default_factory=list)
     completed_task_ids: Set[str] = field(default_factory=set)
     shrines_built: List[str] = field(default_factory=list)
     
@@ -92,29 +85,26 @@ class PlayerState:
         if self.total_moves % 3 == 0:
             self.total_turns += 1
 
-    def add_cargo(self, item: CargoItem) -> bool:
+    def add_cargo(self, item_type: str, colour: Optional[str] = None) -> bool:
         """Attempt to store an item in cargo; return True on success."""
         if len(self.cargo) >= self.CARGO_CAPACITY:
             return False
-        self.cargo.append(item)
+        self.cargo.append((item_type, colour))
         return True
 
     def remove_cargo(self, item_type: str, colour: Optional[str] = None) -> bool:
         """Remove the first matching cargo item."""
-        for idx, item in enumerate(self.cargo):
-            if item.item_type != item_type:
-                continue
-            if colour is not None and item.colour != colour:
-                continue
-            self.cargo.pop(idx)
-            return True
+        for idx, (i_type, i_colour) in enumerate(self.cargo):
+            if i_type == item_type and (colour is None or i_colour == colour):
+                self.cargo.pop(idx)
+                return True
         return False
 
     def has_item(self, item_type: str, colour: Optional[str] = None) -> bool:
         """Check if cargo contains a matching item."""
         return any(
-            item.item_type == item_type and (colour is None or item.colour == colour)
-            for item in self.cargo
+            i_type == item_type and (colour is None or i_colour == colour)
+            for i_type, i_colour in self.cargo
         )
 
     def complete_task(self, task: Task) -> None:
@@ -122,17 +112,13 @@ class PlayerState:
         self.completed_task_ids.add(task.id)
 
         if task.task_type == TileType.STATUE_SOURCE:
-            if not self.add_cargo(CargoItem(STATUE_ITEM, task.colour)):
-                raise RuntimeError("Attempted to take a statue without cargo space")
+            self.add_cargo(STATUE_ITEM, task.colour)
         elif task.task_type == TileType.STATUE_ISLAND:
-            if not self.remove_cargo(STATUE_ITEM, task.colour):
-                raise RuntimeError("No matching statue to deliver at island")
+            self.remove_cargo(STATUE_ITEM, task.colour)
         elif task.task_type == TileType.OFFERING:
-            if not self.add_cargo(CargoItem(OFFERING_ITEM, task.colour)):
-                raise RuntimeError("Attempted to take an offering without cargo space")
+            self.add_cargo(OFFERING_ITEM, task.colour)
         elif task.task_type == TileType.TEMPLE:
-            if not self.remove_cargo(OFFERING_ITEM, task.colour):
-                raise RuntimeError("No offering available for temple delivery")
+            self.remove_cargo(OFFERING_ITEM, task.colour)
             
     def build_shrine(self, tile_id: str) -> None:
         """Build a shrine at the specified tile."""
@@ -147,8 +133,6 @@ class TaskManager:
         self.tasks: Dict[str, Task] = {}
         self.tasks_by_tile: Dict[str, List[Task]] = {}
         self.selected_colours: List[str] = []
-        self.required_shrine_count: int = 3
-        self.scheduled_shrines: List[str] = []
         self.completed_shrines: Set[str] = set()
         
     def assign_colours(self, colours: List[str]) -> None:
@@ -158,22 +142,18 @@ class TaskManager:
         self.selected_colours = colours.copy()
         
     def select_tasks_for_colours(self) -> Dict[str, List[Task]]:
-        """Select tasks for each assigned colour based on task distribution."""
-        if not self.selected_colours:
-            raise ValueError("Colours must be assigned before selecting tasks")
-
+        """Generate tasks dynamically from cycle definitions in cycles.py."""
         selected_tasks: Dict[str, List[Task]] = {}
         self.tasks.clear()
         self.tasks_by_tile.clear()
-        self.scheduled_shrines.clear()
         self.completed_shrines.clear()
 
         # Helper to create and register a task
-        def create_task(tile: Tile, task_type: TileType, colour: str, 
+        def create_task(tile_id: str, task_type: TileType, colour: str, 
                        dependencies: Optional[List[str]] = None) -> Task:
             task = Task(
-                id=f"{tile.id}:{task_type.value}:{colour}",
-                tile_id=tile.id,
+                id=f"{tile_id}:{task_type.value}:{colour}",
+                tile_id=tile_id,
                 task_type=task_type,
                 colour=colour,
                 dependencies=dependencies or [],
@@ -182,84 +162,101 @@ class TaskManager:
             self.tasks_by_tile.setdefault(task.tile_id, []).append(task)
             return task
 
-        for colour in self.selected_colours:
-            colour_tiles = self.grid.get_tiles_by_colour(colour)
-            tiles_by_type: Dict[TileType, List[Tile]] = {}
-            for tile in colour_tiles:
-                tiles_by_type.setdefault(tile.tile_type, []).append(tile)
-
-            # Pick first tile (sorted by ID) for each type
-            def pick_tile(tile_type: TileType) -> Tile:
-                candidates = sorted(tiles_by_type.get(tile_type, []), key=lambda t: t.id)
-                if not candidates:
-                    raise ValueError(f"Colour '{colour}' is missing {tile_type.value} tile")
-                return candidates[0]
-
-            # Create all tasks for this colour in dependency order
-            monster_task = create_task(pick_tile(TileType.MONSTER), TileType.MONSTER, colour)
-            offering_task = create_task(pick_tile(TileType.OFFERING), TileType.OFFERING, colour)
-            statue_source_task = create_task(pick_tile(TileType.STATUE_SOURCE), TileType.STATUE_SOURCE, colour)
-            statue_island_task = create_task(pick_tile(TileType.STATUE_ISLAND), TileType.STATUE_ISLAND, colour, [statue_source_task.id])
-            temple_task = create_task(pick_tile(TileType.TEMPLE), TileType.TEMPLE, colour, [offering_task.id])
-            
-            selected_tasks[colour] = [monster_task, offering_task, statue_source_task, statue_island_task, temple_task]
+        # Generate tasks from CYCLE_DEFINITIONS in cycles.py
+        # Tasks are assigned colours based on logical task groups (hardcoded for map1.json)
+        # Cycles are for routing optimization, not colour grouping
+        self.cycle_tile_orders = CYCLE_DEFINITIONS
+        
+        # Hardcoded colour assignments for map1.json tasks
+        # These ensure dependencies work regardless of cycle order
+        TILE_COLOUR_MAP = {
+            # Pink group
+            "tile_020": "pink", "tile_053": "pink", "tile_071": "pink",
+            "tile_063": "pink", "tile_112": "pink",
+            # Blue group  
+            "tile_028": "blue", "tile_077": "blue", "tile_061": "blue",
+            "tile_094": "blue", "tile_015": "blue",
+            # Green group
+            "tile_105": "green", "tile_009": "green", "tile_108": "green",
+            "tile_005": "green", "tile_007": "green",
+        }
+        
+        # First pass: Create all tasks without dependencies
+        all_created_tasks: List[Task] = []
+        for tile_ids in CYCLE_DEFINITIONS:
+            for tile_id in tile_ids:
+                tile = self.grid.get_tile(tile_id)
+                if not tile:
+                    continue
+                
+                # Look up the hardcoded colour for this tile
+                assigned_colour = TILE_COLOUR_MAP.get(tile_id)
+                if not assigned_colour:
+                    raise ValueError(f"Tile {tile_id} not in hardcoded colour map")
+                
+                # Verify this colour is available on the tile
+                if assigned_colour not in tile.colours:
+                    raise ValueError(f"Colour '{assigned_colour}' not available for {tile_id} (available: {tile.colours})")
+                
+                # Create task without dependencies initially
+                task = create_task(tile_id, tile.tile_type, assigned_colour, [])
+                all_created_tasks.append(task)
+                selected_tasks.setdefault(assigned_colour, []).append(task)
+        
+        # Second pass: Set up dependencies based on task types and colours
+        # Find statue sources and offerings per colour
+        statue_sources: Dict[str, Task] = {}
+        offerings: Dict[str, Task] = {}
+        
+        for task in all_created_tasks:
+            if task.colour:
+                if task.task_type == TileType.STATUE_SOURCE:
+                    statue_sources[task.colour] = task
+                elif task.task_type == TileType.OFFERING:
+                    offerings[task.colour] = task
+        
+        # Now set dependencies for islands and temples
+        for task in all_created_tasks:
+            if task.colour:
+                if task.task_type == TileType.STATUE_ISLAND:
+                    if task.colour in statue_sources:
+                        task.dependencies = [statue_sources[task.colour].id]
+                elif task.task_type == TileType.TEMPLE:
+                    if task.colour in offerings:
+                        task.dependencies = [offerings[task.colour].id]
 
         return selected_tasks
         
     def get_available_tasks(self, player_state: PlayerState) -> List[Task]:
         """Get tasks that can currently be executed."""
-        available = []
-        for task in self.tasks.values():
-            if (
-                task.status != TaskStatus.COMPLETED
-                and task.remaining_uses() > 0
-                and task.can_execute(player_state.completed_task_ids)
-            ):
-                available.append(task)
-        return available
+        return [
+            task for task in self.tasks.values()
+            if task.status != TaskStatus.COMPLETED and task.can_execute(player_state.completed_task_ids)
+        ]
         
     def get_shrine_candidates(self) -> List[Tile]:
-        """Get potential shrine build locations."""
-        shrine_tiles = self.grid.get_tiles_by_type(TileType.SHRINE)
+        """Get potential shrine build locations from map1.json hardcoded list."""
         excluded_tiles = {task.tile_id for task in self.tasks.values()}
-        excluded_tiles.update(self.scheduled_shrines)
         excluded_tiles.update(self.completed_shrines)
-        return [tile for tile in shrine_tiles if tile.id not in excluded_tiles]
+        return [tile for tile_id in MAP1_SHRINE_TILES 
+                if tile_id not in excluded_tiles and (tile := self.grid.get_tile(tile_id))]
 
     def get_tasks_for_tile(self, tile_id: str) -> List[Task]:
         """Return all tasks associated with the provided tile."""
         return list(self.tasks_by_tile.get(tile_id, []))
 
-    def set_required_shrine_count(self, count: int) -> None:
-        if count < 0:
-            raise ValueError("Shrine count must be non-negative")
-        self.required_shrine_count = count
-
-    def get_required_shrine_count(self) -> int:
-        return self.required_shrine_count
-
-    def register_scheduled_shrines(self, shrine_ids: List[str]) -> None:
-        for shrine_id in shrine_ids:
-            if shrine_id not in self.scheduled_shrines:
-                self.scheduled_shrines.append(shrine_id)
-
     def mark_shrine_built(self, shrine_id: str) -> None:
         self.completed_shrines.add(shrine_id)
 
-    def remaining_shrine_requirement(self) -> int:
-        completed = len(self.completed_shrines)
-        scheduled = sum(1 for shrine_id in self.scheduled_shrines if shrine_id not in self.completed_shrines)
-        return max(0, self.required_shrine_count - completed - scheduled)
-        
     def execute_task(self, task: Task, player_state: PlayerState) -> bool:
         """Execute a task and update game state."""
-        if task.remaining_uses() <= 0 or not task.can_execute(player_state.completed_task_ids):
+        if task.status == TaskStatus.COMPLETED or not task.can_execute(player_state.completed_task_ids):
             return False
             
         # Check if player is adjacent to task tile
         task_tile = self.grid.get_tile(task.tile_id)
         current_tile = self.grid.get_tile(player_state.current_tile_id)
-        if not task_tile or not current_tile or task.tile_id not in current_tile.neighbours:
+        if not task_tile or not current_tile or task.tile_id not in self.grid.get_neighbours(player_state.current_tile_id):
             return False
             
         # Check specific task requirements
@@ -284,19 +281,14 @@ class TaskManager:
                 
         # Execute the task
         player_state.complete_task(task)
-        task.record_execution()
+        task.mark_completed()
         return True
-        
-    def all_tasks_completed(self) -> bool:
-        """Check if all tasks are completed."""
-        return all(task.status == TaskStatus.COMPLETED for task in self.tasks.values())
-        
-    def get_task_summary(self) -> Dict[str, int]:
-        """Get summary of task completion status."""
-        summary = {}
-        for status in TaskStatus:
-            summary[status.value] = sum(
-                1 for task in self.tasks.values() 
-                if task.status == status
-            )
-        return summary
+
+
+# Simplified cycle data model
+
+@dataclass
+class TaskCycle:
+    """Collection of tasks grouped into a cycle with their route."""
+    tasks: List[Task]
+    internal_route: List[str] = field(default_factory=list)

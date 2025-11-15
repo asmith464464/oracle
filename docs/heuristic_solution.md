@@ -1,62 +1,87 @@
-# Cycle Heuristic Overview
+# Heuristic Overview
 
-This document summarizes how the current heuristic assembles routes for the Oracle boating scenario. The focus is on `src/heuristic.py`, with supporting references to the distance and task utilities.
+This document describes how the current heuristic builds routes for the Oracle boating puzzle. The algorithm is implemented in `src/heuristic.py`.
 
 ## High-Level Flow
 
-`CycleHeuristic.solve` orchestrates the solution:
+The `CycleHeuristic.solve()` method orchestrates the solution in 6 clear steps:
 
-1. **Route planning** — `_build_route_with_cycles` walks the pending tasks, choosing the next feasible task that minimises travel from the current position while respecting cargo limits.
-2. **Cycle formation** — the same loop grows a `TaskCycle` around an anchor tile; the cycle closes when the next task lies beyond the distance threshold or the cycle hits the task cap.
-3. **Route repair** — `repair_route` (from `src/route_utils.py`) enforces water adjacency both before and after `_ensure_return_to_zeus` appends the closing leg.
-4. **Statistics** — `_calculate_statistics` records movement totals and cycle composition for downstream reporting and visualisation.
+1. **Start at Zeus** — Initialize route at the starting tile (tile_043)
+2. **Load cycles** — Import cycle definitions from `src/cycles.py`
+3. **Build route** — Visit each cycle's tiles sequentially using shortest water paths
+4. **Repair route** — Fill any gaps between non-adjacent tiles
+5. **Return to Zeus** — Ensure the route ends at the starting tile
+6. **Calculate statistics** — Compute moves, turns, and cycle metrics
 
-The solver returns the final route plus the statistics dictionary; `self.cycles` holds the cycle metadata for visualisation.
+After the route is built, the `add_shrines_to_route()` function adds 3 hardcoded shrines and returns to Zeus.
 
-## Route Planning and Cycle Grouping
+## Cycle Definitions
 
-`_build_route_with_cycles` maintains:
+Cycles are defined in **`src/cycles.py`** as a simple list of lists:
 
-- `pending`: the tasks chosen by `TaskManager.select_tasks_for_colours`.
-- `_PlanningState`: a lightweight inventory mirror of the simulator (two cargo slots, dependency tracking).
-- `current_cycle`: an in-progress `TaskCycle` and its partial route segment.
-- `cycle_anchor_tile`: the tile id that seeds the current cycle.
+```python
+CYCLE_DEFINITIONS = [
+    ["tile_105", "tile_009", "tile_007", "tile_108", "tile_005"],  # Green tasks
+    ["tile_020", "tile_053", "tile_071", "tile_063", "tile_112"],  # Pink tasks
+    ["tile_028", "tile_061", "tile_094", "tile_077", "tile_015"],  # Blue tasks
+]
+```
 
-Each iteration:
+Each cycle is visited in order. Within each cycle, tiles are visited in the exact order specified.
 
-1. Filters pending tasks to those whose dependencies are satisfied and whose execution fits the current cargo (`_state_allows_task`).
-2. Invokes `_select_next_task`, which applies two rules:
-	- Only consider tasks within the cycle distance threshold of the anchor (unless starting a new cycle).
-	- Prefer the candidate with the shortest water path from the boat, using `_best_path_to_task` and `DistanceCalculator` to probe adjacent water tiles.
-3. Appends the chosen path via `append_path`, updates the planning state through `_apply_task_effects`, and removes the task from `pending`.
+## Route Building Algorithm
 
-If the next candidate violates the distance threshold or the cycle already contains `MAX_CYCLE_TASKS` tasks, `_finalize_cycle` snapshots the working data into a `TaskCycle`, resets the anchor, and starts a new cycle. This approach allows single-task cycles for isolated tiles while keeping dense pockets together.
+For each cycle:
 
-### Distance Caching
+1. Start from the current boat position
+2. For each task tile in the cycle (in order):
+   - Find the shortest water path to an adjacent water tile
+   - Append this path to the route
+   - Update current position
+3. Store the cycle's internal route for visualization
 
-`_task_land_distance` caches the shortest water distance between task tiles so repeated anchor checks stay cheap. Distances include the nearest water tiles surrounding each task.
+The route builder uses `RouteBuilder.best_path_to_task()` which:
+- Finds all water tiles adjacent to the target land tile
+- Computes shortest paths from current position to each adjacent water tile
+- Returns the shortest path found
 
-## Route Repair and Realignment
+## Path Finding
 
-After the initial pass, `solve`:
+All pathfinding uses `DistanceCalculator` from `src/grid.py`, which wraps NetworkX's shortest path algorithm. The calculator works only with water tiles, since the boat can only travel on water.
 
-1. Calls `repair_route` to fill any water gaps introduced by straight-line planning.
-2. Ensures the trip returns to Zeus with `_ensure_return_to_zeus` and runs `repair_route` again.
-3. Uses `_realign_cycles_to_route` to recalculate each cycle’s entry/exit indices against the repaired route so visualisers display the correct segments.
+## Route Repair
 
-## Statistics and Reporting
+After building the initial route, gaps may exist where consecutive tiles aren't adjacent (due to how paths are concatenated). The repair step:
 
-`_calculate_statistics` reports:
+1. Walks through the route
+2. When two consecutive tiles aren't adjacent, inserts the shortest path between them
+3. Ensures all tiles in the final route are properly connected
 
-- `total_moves`, `total_turns`, `route_length` — movement metrics.
-- `cycles_formed`, `tasks_per_cycle`, `cycle_distances` — composition metrics for each cycle.
+## Shrine Insertion
 
-`get_cycle_summary` exposes a serialisable view of every `TaskCycle` (id, task list, colours present, entry/exit tiles, distance) for visualisation and exports.
+The `add_shrines_to_route()` function (replacing the old `ShrineOptimiser`):
+
+1. Takes 3 hardcoded shrine tiles from `SHRINE_TILES` in `cycles.py`
+2. Filters out any already visited during the cycle route
+3. Appends shortest paths to the first 3 unvisited shrines
+4. Returns to Zeus
+
+This is much simpler than the old optimization logic and makes the code easier to understand and modify.
+
+## Statistics
+
+The solver computes:
+- `total_moves` — Total number of tile-to-tile movements
+- `total_turns` — Moves divided by 3 (rounded up)
+- `route_length` — Number of tiles in the route
+- `cycles_formed` — Number of cycles (always 3 for map1.json)
+- `tasks_per_cycle` — Task count in each cycle
+- `cycle_distances` — Length of each cycle's internal route
 
 ## Related Components
 
-- `src/tasks.py` — `TaskManager` selects tasks per colour, applies dependency rules, and exposes tile lookups.
-- `src/distance_utils.py` — `DistanceCalculator` wraps NetworkX shortest-path queries for water tiles and adjacency discovery.
-- `src/route_utils.py` — `append_path` and `repair_route` guarantee valid water traversal.
-
-Together these modules keep the heuristic self-contained: planning logic lives in `CycleHeuristic`, data access stays in model/manager classes, and rendering logic remains optional in `src/visualizer.py`.
+- **`src/cycles.py`** — Cycle definitions (modify here to experiment)
+- **`src/tasks.py`** — Task creation, dependencies, and cargo management
+- **`src/simulator.py`** — Route validation and execution
+- **`src/grid.py`** — Map representation and pathfinding utilities
+- **`src/visualiser.py`** — Optional visualization (does not affect routing)
