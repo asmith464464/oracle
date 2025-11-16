@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple, Set
 from dataclasses import dataclass, field
 from enum import Enum
 import json
-
+import networkx as nx
 
 class TileType(Enum):
     """Enumeration of tile types on the hex grid."""
@@ -35,15 +35,6 @@ class Tile:
     def is_water(self) -> bool:
         """Check if this tile is water (traversable)."""
         return self.tile_type == TileType.WATER
-
-    def to_dict(self) -> Dict:
-        """Convert tile to dictionary for JSON serialization."""
-        return {
-            'id': self.id,
-            'type': self.tile_type.value,
-            'colours': list(self.colours),
-            'coords': self.coords,
-        }
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'Tile':
@@ -99,15 +90,6 @@ class HexGrid:
     def get_zeus_tile(self) -> Optional[Tile]:
         """Get the Zeus tile (starting/ending position)."""
         return self.get_tile(self.zeus_tile_id)
-        
-    def to_json(self, filepath: str) -> None:
-        """Save grid to JSON file."""
-        data = {
-            'zeus_tile': self.zeus_tile_id,
-            'tiles': [tile.to_dict() for tile in self.tiles.values()]
-        }
-        with open(filepath, 'w') as f:
-            json.dump(data, f, indent=2)
             
     @classmethod
     def from_json(cls, filepath: str) -> 'HexGrid':
@@ -131,12 +113,6 @@ class HexGrid:
         water_count = sum(1 for t in self.tiles.values() if t.is_water())
         task_count = sum(1 for t in self.tiles.values() if not t.is_water())
         return f"HexGrid: {len(self.tiles)} tiles ({water_count} water, {task_count} tasks)"
-
-
-# Distance and pathfinding utilities
-
-import networkx as nx
-
 
 class DistanceCalculator:
     """Handles shortest path calculations on the hex grid."""
@@ -167,17 +143,6 @@ class DistanceCalculator:
                         graph.add_edge(tile_id, neighbour_id, weight=1)
         
         return graph
-        
-    def get_shortest_distance(self, from_tile_id: str, to_tile_id: str) -> Optional[int]:
-        """Get shortest distance between two water tiles."""
-        try:
-            return int(
-                nx.shortest_path_length(
-                    self.water_graph, from_tile_id, to_tile_id, weight='weight'
-                )
-            )
-        except (nx.NetworkXNoPath, nx.NodeNotFound):
-            return None
             
     def get_shortest_path(self, from_tile_id: str, to_tile_id: str) -> Optional[List[str]]:
         """Get shortest path between two water tiles."""

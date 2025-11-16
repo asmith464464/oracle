@@ -1,9 +1,7 @@
 """Hex-grid visualisation for map1.json with hardcoded tile positions."""
 
 from __future__ import annotations
-
 from typing import Iterable, Sequence
-
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.patheffects as patheffects
@@ -11,15 +9,11 @@ from hexalattice.hexalattice import plot_single_lattice_custom_colors
 from matplotlib.patches import Circle, Polygon
 import math
 
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-
 from .grid import HexGrid, Tile, TileType
 
 # Hex layout constants for visualization
 HEX_MIN_DIAMETER = 0.9
 HEX_COLUMN_SPACING = 1.15
-
 
 def calculate_tile_position(col: int, row: int) -> tuple[float, float]:
     """Calculate (x, y) position for a hex tile from its axial coordinates."""
@@ -71,14 +65,14 @@ PALETTE = (
     "#E67E22",
 )
 
-
 class HexGridVisualiser:
     """Draw the map and optional overlays with minimal ceremony."""
 
-    def __init__(self, grid: HexGrid, min_diameter: float = 0.9) -> None:
+    def __init__(self, grid: HexGrid) -> None:
         self.grid = grid
-        self.min_diameter = 0.9  # Hardcoded for map1.json
+        self.min_diameter = HEX_MIN_DIAMETER
         self.tile_ids = list(grid.tiles)
+
         # Calculate positions from tile coordinates
         centres = [calculate_tile_position(*tile.coords) for tile_id in self.tile_ids if (tile := self.grid.get_tile(tile_id))]
         self.centres = np.array(centres, dtype=float) if centres else np.empty((0, 2))
@@ -349,7 +343,12 @@ class HexGridVisualiser:
 
             self._draw_colour_markers(ax, centre, tile.colours)
 
-        self._draw_tile_key(ax)
+        # Add legend/key
+        lines = ["Key"] + [f"{abbr} = {label}" for _, abbr, label in TILE_KEY_ENTRIES] + ["", "Colour dots show tile colours"]
+        ax.text(
+            1.04, 0.96, "\n".join(lines), transform=ax.transAxes, ha="left", va="top", fontsize=7, color="#1F2933",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.9, linewidth=0.5), zorder=8, clip_on=False
+        )
 
         return fig, ax
 
@@ -357,9 +356,8 @@ class HexGridVisualiser:
         if not colours:
             return
         
-        # Hardcoded positions for 1-3 colours (map1.json has max 3)
-        positions = [(0.0, -0.20), (-0.14, -0.20), (0.14, -0.20)]
-        radius = self.min_diameter * 0.065
+        # Hardcoded positions for 1-3 colours (map1.json has max 3). Change number to change dot size
+        radius = self.min_diameter * 0.08
         
         for i, colour in enumerate(colours[:3]):
             if i == 0 and len(colours) == 1:
@@ -372,15 +370,8 @@ class HexGridVisualiser:
             colour_hex = PLAYER_COLOURS.get(colour, "#2C3E50")
             ax.add_patch(Circle(
                 (centre[0] + offset[0] * self.min_diameter, centre[1] + offset[1] * self.min_diameter),
-                radius, facecolor=colour_hex, edgecolor="#1F2933", linewidth=0.4, zorder=7.6
+                radius, facecolor=colour_hex, edgecolor="none", linewidth=0, zorder=7.6
             ))
-
-    def _draw_tile_key(self, ax) -> None:
-        lines = ["Key"] + [f"{abbr} = {label}" for _, abbr, label in TILE_KEY_ENTRIES] + ["", "Colour dots show tile colours"]
-        ax.text(
-            1.04, 0.96, "\n".join(lines), transform=ax.transAxes, ha="left", va="top", fontsize=7, color="#1F2933",
-            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.9, linewidth=0.5), zorder=8, clip_on=False
-        )
 
     def _outline_tiles(
         self,
@@ -394,53 +385,46 @@ class HexGridVisualiser:
         if not tile_ids:
             return
 
-        vertex_angles = [math.pi / 2 + k * (math.pi / 3) for k in range(6)]
+        # Pre-compute hex vertex angles and radius
+        angles = [math.pi / 2 + k * math.pi / 3 for k in range(6)]
         radius = self.min_diameter * 0.62
 
         for tile_id in tile_ids:
             idx = self.id_to_index.get(tile_id)
             if idx is None:
                 continue
+            
             cx, cy = self.centres[idx]
-            vertices = [
-                (cx + radius * math.cos(angle), cy + radius * math.sin(angle))
-                for angle in vertex_angles
-            ]
-            patch = Polygon(
-                vertices,
-                closed=True,
-                fill=False,
-                edgecolor=colour,
-                linewidth=linewidth,
-                alpha=alpha,
-                zorder=6.8,
-                joinstyle="round",
+            vertices = [(cx + radius * math.cos(a), cy + radius * math.sin(a)) for a in angles]
+            
+            ax.add_patch(Polygon(
+                vertices, closed=True, fill=False, edgecolor=colour,
+                linewidth=linewidth, alpha=alpha, zorder=6.8, joinstyle="round",
                 path_effects=[
                     patheffects.Stroke(linewidth=linewidth + 1.4, foreground="#FFFFFF"),
                     patheffects.Normal(),
-                ],
-            )
-            ax.add_patch(patch)
-
-
-    
-
+                ]
+            ))
 
     def _draw_route_arrows(self, ax, route: Sequence[str], color: str = "#1F2933", alpha: float = 0.7) -> None:
         """Draw sequential step numbers on route tiles."""
-        seen = set()
+        # Collect all indices for each tile
+        tile_indices: dict[str, list[int]] = {}
         for i, tile_id in enumerate(route):
-            if tile_id in seen:
-                continue
-            seen.add(tile_id)
-            
+            if tile_id not in tile_indices:
+                tile_indices[tile_id] = []
+            tile_indices[tile_id].append(i + 1)
+        
+        # Draw all indices for each tile
+        for tile_id, indices in tile_indices.items():
             tile = self.grid.get_tile(tile_id)
             if not tile:
                 continue
             
             cx, cy = calculate_tile_position(*tile.coords)
+            label = ",".join(str(idx) for idx in indices)
             ax.text(
-                cx, cy, str(i + 1),
+                cx, cy, label,
                 ha="center", va="center", fontsize=8,
                 color=color, alpha=alpha, weight="bold", zorder=7.5,
                 bbox=dict(boxstyle="round,pad=0.15", facecolor="white", alpha=0.7, linewidth=0),

@@ -13,13 +13,6 @@ from .cycles import CYCLE_DEFINITIONS
 STATUE_ITEM = "statue"
 OFFERING_ITEM = "offering"
 
-# Hardcoded shrine tiles for map1.json
-MAP1_SHRINE_TILES = [
-    "tile_003", "tile_016", "tile_023", "tile_029", "tile_050",
-    "tile_058", "tile_076", "tile_079", "tile_084", "tile_091",
-    "tile_096", "tile_103"
-]
-
 __all__ = [
     "STATUE_ITEM",
     "OFFERING_ITEM",
@@ -57,6 +50,11 @@ class Task:
         """Mark task as completed."""
         self.status = TaskStatus.COMPLETED
 
+@dataclass
+class TaskCycle:
+    """Collection of tasks grouped into a cycle with their route."""
+    tasks: List[Task]
+    internal_route: List[str] = field(default_factory=list)
 
 # CargoItem is a tuple: (item_type: str, colour: Optional[str])
 CargoItem = Tuple[str, Optional[str]]
@@ -163,7 +161,6 @@ class TaskManager:
             return task
 
         # Generate tasks from CYCLE_DEFINITIONS in cycles.py
-        # Tasks are assigned colours based on logical task groups (hardcoded for map1.json)
         # Cycles are for routing optimization, not colour grouping
         self.cycle_tile_orders = CYCLE_DEFINITIONS
         
@@ -191,8 +188,6 @@ class TaskManager:
                 
                 # Look up the hardcoded colour for this tile
                 assigned_colour = TILE_COLOUR_MAP.get(tile_id)
-                if not assigned_colour:
-                    raise ValueError(f"Tile {tile_id} not in hardcoded colour map")
                 
                 # Verify this colour is available on the tile
                 if assigned_colour not in tile.colours:
@@ -233,13 +228,6 @@ class TaskManager:
             task for task in self.tasks.values()
             if task.status != TaskStatus.COMPLETED and task.can_execute(player_state.completed_task_ids)
         ]
-        
-    def get_shrine_candidates(self) -> List[Tile]:
-        """Get potential shrine build locations from map1.json hardcoded list."""
-        excluded_tiles = {task.tile_id for task in self.tasks.values()}
-        excluded_tiles.update(self.completed_shrines)
-        return [tile for tile_id in MAP1_SHRINE_TILES 
-                if tile_id not in excluded_tiles and (tile := self.grid.get_tile(tile_id))]
 
     def get_tasks_for_tile(self, tile_id: str) -> List[Task]:
         """Return all tasks associated with the provided tile."""
@@ -283,12 +271,3 @@ class TaskManager:
         player_state.complete_task(task)
         task.mark_completed()
         return True
-
-
-# Simplified cycle data model
-
-@dataclass
-class TaskCycle:
-    """Collection of tasks grouped into a cycle with their route."""
-    tasks: List[Task]
-    internal_route: List[str] = field(default_factory=list)

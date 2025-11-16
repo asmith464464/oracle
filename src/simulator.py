@@ -95,9 +95,10 @@ class RouteSimulator:
         for neighbour_id in self.grid.get_neighbours(current_tile_id):
             neighbour_tile = self.grid.get_tile(neighbour_id)
             if (neighbour_tile.tile_type == TileType.SHRINE and 
-                neighbour_id in shrine_positions and
                 neighbour_id not in player_state.shrines_built):
-                player_state.build_shrine(neighbour_id)
-                self.task_manager.mark_shrine_built(neighbour_id)
-                step.action_type = 'shrine'
-                step.action_target = f"shrine@{neighbour_id}"
+                # Build shrine if we're adjacent to it (either explicitly requested or encountered)
+                if neighbour_id in shrine_positions or len(player_state.shrines_built) < 3:
+                    player_state.build_shrine(neighbour_id)
+                    self.task_manager.mark_shrine_built(neighbour_id)
+                    step.action_type = 'shrine'
+                    step.action_target = f"shrine@{neighbour_id}"

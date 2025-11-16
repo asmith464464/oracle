@@ -145,33 +145,18 @@ class CycleHeuristic:
         
         return repaired, stats
 
-    def get_cycle_summary(self) -> List[Dict]:
-        """Expose cycle metadata for visualizers."""
-        return [
-            {
-                "cycle_id": idx,
-                "task_count": len(cycle.tasks),
-                "task_types": [task.task_type.value for task in cycle.tasks],
-                "task_ids": [task.tile_id for task in cycle.tasks],
-                "cycle_colours": sorted({task.colour for task in cycle.tasks if task.colour}),
-                "entry_tile": cycle.internal_route[0] if cycle.internal_route else None,
-                "exit_tile": cycle.internal_route[-1] if cycle.internal_route else None,
-                "segment_distance": len(cycle.internal_route) - 1 if cycle.internal_route else 0,
-            }
-            for idx, cycle in enumerate(self.cycles)
-        ]
 
-
-def add_shrines_to_route(route: List[str], grid: HexGrid, already_visited: Set[str]) -> Tuple[List[str], List[str]]:
-    """Add shrines to the route after all cycles are complete (count specified in cycles.py)."""
-    if not route:
+def add_shrines_to_route(route: List[str], grid: HexGrid, already_visited: Set[str], 
+                        already_built: Set[str], count_needed: int) -> Tuple[List[str], List[str]]:
+    """Add extra shrines to the route if needed to reach the target count."""
+    if not route or count_needed <= 0:
         return route, []
     
     distance_calc = DistanceCalculator(grid)
     zeus_tile = grid.get_zeus_tile()
     
-    # Filter shrines that haven't been visited yet
-    shrines_to_visit = [s for s in SHRINE_TILES if s not in already_visited]
+    # Filter shrines that haven't been visited or built yet
+    shrines_to_visit = [s for s in SHRINE_TILES if s not in already_visited and s not in already_built]
     
     if not shrines_to_visit:
         return route, []
@@ -179,8 +164,8 @@ def add_shrines_to_route(route: List[str], grid: HexGrid, already_visited: Set[s
     new_route = list(route)
     shrine_positions: List[str] = []
     
-    # Append path to each shrine from current position
-    for shrine_id in shrines_to_visit:
+    # Append path to shrines until we reach the needed count
+    for shrine_id in shrines_to_visit[:count_needed]:
         shrine_tile = grid.get_tile(shrine_id)
         if not shrine_tile:
             continue

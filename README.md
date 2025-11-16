@@ -24,7 +24,7 @@ The output shows total moves, turns, and a visualization of the route.
 
 ## How To Modify Cycles
 
-The key to optimizing the route is changing how tasks are grouped and ordered. See **`docs/CYCLES.md`** for a complete guide on modifying cycle definitions.
+The key to optimising the route is changing how tasks are grouped and ordered. See **`docs/CYCLES.md`** for a complete guide on modifying cycle definitions.
 
 Quick start:
 1. Edit `src/cycles.py`

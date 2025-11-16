@@ -66,8 +66,6 @@ The `add_shrines_to_route()` function (replacing the old `ShrineOptimiser`):
 3. Appends shortest paths to the first 3 unvisited shrines
 4. Returns to Zeus
 
-This is much simpler than the old optimization logic and makes the code easier to understand and modify.
-
 ## Statistics
 
 The solver computes:
