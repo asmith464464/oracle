@@ -6,14 +6,12 @@ This document describes how the current heuristic builds routes for the Oracle b
 
 The `CycleHeuristic.solve()` method orchestrates the solution in 6 clear steps:
 
-1. **Start at Zeus** — Initialize route at the starting tile (tile_043)
+1. **Start at Zeus** — Initialise route at the starting tile (tile_043)
 2. **Load cycles** — Import cycle definitions from `src/cycles.py`
 3. **Build route** — Visit each cycle's tiles sequentially using shortest water paths
 4. **Repair route** — Fill any gaps between non-adjacent tiles
 5. **Return to Zeus** — Ensure the route ends at the starting tile
 6. **Calculate statistics** — Compute moves, turns, and cycle metrics
-
-After the route is built, the `add_shrines_to_route()` function adds 3 hardcoded shrines and returns to Zeus.
 
 ## Cycle Definitions
 
@@ -38,7 +36,7 @@ For each cycle:
    - Find the shortest water path to an adjacent water tile
    - Append this path to the route
    - Update current position
-3. Store the cycle's internal route for visualization
+3. Store the cycle's internal route for visualisation
 
 The route builder uses `RouteBuilder.best_path_to_task()` which:
 - Finds all water tiles adjacent to the target land tile
@@ -82,4 +80,4 @@ The solver computes:
 - **`src/tasks.py`** — Task creation, dependencies, and cargo management
 - **`src/simulator.py`** — Route validation and execution
 - **`src/grid.py`** — Map representation and pathfinding utilities
-- **`src/visualiser.py`** — Optional visualization (does not affect routing)
+- **`src/visualiser.py`** — Optional visualisation (does not affect routing)

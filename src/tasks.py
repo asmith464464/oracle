@@ -161,7 +161,6 @@ class TaskManager:
             return task
 
         # Generate tasks from CYCLE_DEFINITIONS in cycles.py
-        # Cycles are for routing optimization, not colour grouping
         self.cycle_tile_orders = CYCLE_DEFINITIONS
         
         # Hardcoded colour assignments for map1.json tasks

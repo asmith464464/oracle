@@ -1,4 +1,4 @@
-﻿"""Core cycle-based heuristic for route optimization."""
+﻿"""Core cycle-based heuristic for route optimisation."""
 
 import math
 from typing import Dict, List, Optional, Tuple, Set
@@ -32,7 +32,7 @@ class RouteBuilder:
 
 
 class CycleHeuristic:
-    """Implements the cycle-based heuristic for route optimization."""
+    """Implements the cycle-based heuristic for route optimisation."""
 
     def __init__(self, grid: HexGrid, task_manager: TaskManager):
         self.grid = grid

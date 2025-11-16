@@ -11,15 +11,9 @@ import math
 
 from .grid import HexGrid, Tile, TileType
 
-# Hex layout constants for visualization
-HEX_MIN_DIAMETER = 0.9
-HEX_COLUMN_SPACING = 1.15
+HEX_MIN_DIAMETER = 0.9 # Minimum diameter of hex tiles
+HEX_COLUMN_SPACING = 1.15 # Gap between tiles
 
-def calculate_tile_position(col: int, row: int) -> tuple[float, float]:
-    """Calculate (x, y) position for a hex tile from its axial coordinates."""
-    x = col * HEX_COLUMN_SPACING + (row % 2) * (HEX_COLUMN_SPACING / 2)
-    y = row * HEX_MIN_DIAMETER
-    return (x, y)
 
 BASE_COLOURS = {
     TileType.WATER.value: "#B7C9E2",
@@ -55,18 +49,24 @@ TILE_KEY_ENTRIES = [
 
 TILE_ABBREVIATIONS = {tile_type: abbr for tile_type, abbr, _ in TILE_KEY_ENTRIES}
 
-PALETTE = (
-    "#E74C3C",
-    "#3498DB",
-    "#27AE60",
+CYCLE_COLOURS = (
+    "#E98809",
+    "#F00606",
+    "#0FF7E8",
     "#F1C40F",
     "#9B59B6",
     "#1ABC9C",
     "#E67E22",
 )
 
+def calculate_tile_position(col: int, row: int) -> tuple[float, float]:
+    """Calculate (x, y) position for a hex tile from its axial coordinates."""
+    x = col * HEX_COLUMN_SPACING + (row % 2) * (HEX_COLUMN_SPACING / 2)
+    y = row * HEX_MIN_DIAMETER
+    return (x, y)
+
 class HexGridVisualiser:
-    """Draw the map and optional overlays with minimal ceremony."""
+    """Draw the map and optional overlays."""
 
     def __init__(self, grid: HexGrid) -> None:
         self.grid = grid
@@ -154,7 +154,7 @@ class HexGridVisualiser:
         route_list = list(route)
         
         for idx, cycle in enumerate(cycles):
-            cycle_colour = PALETTE[idx % len(PALETTE)]
+            cycle_colour = CYCLE_COLOURS[idx % len(CYCLE_COLOURS)]
             
             # Outline task tiles
             task_ids = [task.tile_id for task in cycle.tasks]
