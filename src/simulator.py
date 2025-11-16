@@ -38,18 +38,16 @@ class RouteSimulator:
         self.grid = grid
         self.task_manager = task_manager
         
-    def simulate_route(self, route: List[str], 
-                      shrine_positions: Optional[List[str]] = None) -> SimulationResult:
+    def simulate_route(self, route: List[str]) -> SimulationResult:
         """Simulate complete route execution."""
         zeus_tile = self.grid.get_zeus_tile()
         player_state = PlayerState(current_tile_id=zeus_tile.id)
         steps: List[SimulationStep] = []
-        shrine_set = set(shrine_positions) if shrine_positions else set()
         
         for i in range(1, len(route)):
             from_tile_id = route[i - 1]
             to_tile_id = route[i]
-            step_result = self._simulate_step(from_tile_id, to_tile_id, player_state, shrine_set)
+            step_result = self._simulate_step(from_tile_id, to_tile_id, player_state)
             steps.append(step_result)
         
         return SimulationResult(
@@ -64,7 +62,7 @@ class RouteSimulator:
         )
         
     def _simulate_step(self, from_tile_id: str, to_tile_id: str, 
-                      player_state: PlayerState, shrine_positions: Set[str]) -> SimulationStep:
+                      player_state: PlayerState) -> SimulationStep:
         """Simulate a single step of movement."""
         player_state.execute_move(to_tile_id, 1)
         step = SimulationStep(
@@ -73,7 +71,7 @@ class RouteSimulator:
             turn_number=player_state.total_turns
         )
         self._check_and_execute_tasks(to_tile_id, player_state, step)
-        self._check_and_build_shrines(to_tile_id, player_state, step, shrine_positions)
+        self._check_and_build_shrines(to_tile_id, player_state, step)
         return step
         
     def _check_and_execute_tasks(self, current_tile_id: str, player_state: PlayerState, step: SimulationStep) -> None:
@@ -90,15 +88,22 @@ class RouteSimulator:
                     step.action_target = f"{task.task_type.value}@{neighbour_id}"
                         
     def _check_and_build_shrines(self, current_tile_id: str, player_state: PlayerState,
-                                step: SimulationStep, shrine_positions: Set[str]) -> None:
+                                step: SimulationStep) -> None:
         """Check for and build shrines if appropriate."""
+        # Only build shrines if we didn't execute a task this step
+        if step.action_type == 'task':
+            return
+        
+        # Build shrine if adjacent, not yet built, and we have < 3 total
+        if len(player_state.shrines_built) >= 3:
+            return
+            
         for neighbour_id in self.grid.get_neighbours(current_tile_id):
             neighbour_tile = self.grid.get_tile(neighbour_id)
-            if (neighbour_tile.tile_type == TileType.SHRINE and 
+            if (neighbour_tile and neighbour_tile.tile_type == TileType.SHRINE and 
                 neighbour_id not in player_state.shrines_built):
-                # Build shrine if we're adjacent to it (either explicitly requested or encountered)
-                if neighbour_id in shrine_positions or len(player_state.shrines_built) < 3:
-                    player_state.build_shrine(neighbour_id)
-                    self.task_manager.mark_shrine_built(neighbour_id)
-                    step.action_type = 'shrine'
-                    step.action_target = f"shrine@{neighbour_id}"
+                player_state.build_shrine(neighbour_id)
+                self.task_manager.mark_shrine_built(neighbour_id)
+                step.action_type = 'shrine'
+                step.action_target = f"shrine@{neighbour_id}"
+                return  # Only build one shrine per step

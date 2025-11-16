@@ -3,9 +3,8 @@
 import math
 from typing import Dict, List, Optional, Tuple, Set
 
-from .grid import HexGrid, DistanceCalculator
+from .grid import HexGrid, DistanceCalculator, TileType
 from .tasks import Task, TaskManager, TaskCycle
-from .cycles import SHRINE_TILES
 
 
 class RouteBuilder:
@@ -146,46 +145,60 @@ class CycleHeuristic:
         return repaired, stats
 
 
-def add_shrines_to_route(route: List[str], grid: HexGrid, already_visited: Set[str], 
-                        already_built: Set[str], count_needed: int) -> Tuple[List[str], List[str]]:
-    """Add extra shrines to the route if needed to reach the target count."""
+def add_shrines_to_route(route: List[str], grid: HexGrid, 
+                        already_built: Set[str], count_needed: int) -> List[str]:
+    """Add paths to nearest unbuilt shrines to reach the target count."""
     if not route or count_needed <= 0:
-        return route, []
+        return route
     
     distance_calc = DistanceCalculator(grid)
     zeus_tile = grid.get_zeus_tile()
     
-    # Filter shrines that haven't been visited or built yet
-    shrines_to_visit = [s for s in SHRINE_TILES if s not in already_visited and s not in already_built]
+    # Get all shrine tiles from the map
+    all_shrines = [tile.id for tile in grid.tiles.values() 
+                  if tile.tile_type == TileType.SHRINE and tile.id not in already_built]
     
-    if not shrines_to_visit:
-        return route, []
+    if not all_shrines:
+        return route
     
     new_route = list(route)
-    shrine_positions: List[str] = []
+    shrines_added = 0
     
-    # Append path to shrines until we reach the needed count
-    for shrine_id in shrines_to_visit[:count_needed]:
-        shrine_tile = grid.get_tile(shrine_id)
-        if not shrine_tile:
-            continue
-        
-        # Find nearest water tile adjacent to shrine
-        water_tiles = distance_calc.find_nearest_water_tiles(shrine_id)
-        if not water_tiles:
-            continue
-        
-        best_water = water_tiles[0][0]
+    # Visit nearest shrines until we reach the needed count
+    while shrines_added < count_needed and all_shrines:
         current_pos = new_route[-1]
         
-        # Get path from current position to shrine
-        to_shrine = distance_calc.get_shortest_path(current_pos, best_water)
-        if to_shrine:
-            if new_route[-1] == to_shrine[0]:
-                new_route.extend(to_shrine[1:])
+        # Find nearest unvisited shrine
+        nearest_shrine = None
+        min_distance = float('inf')
+        
+        for shrine_id in all_shrines:
+            # Find adjacent water tiles for this shrine
+            water_tiles = distance_calc.find_nearest_water_tiles(shrine_id)
+            if not water_tiles:
+                continue
+            
+            # Check distance from current position to shrine's adjacent water
+            for water_tile, _ in water_tiles:
+                path = distance_calc.get_shortest_path(current_pos, water_tile)
+                if path and len(path) < min_distance:
+                    min_distance = len(path)
+                    nearest_shrine = (shrine_id, water_tile)
+        
+        if not nearest_shrine:
+            break
+        
+        shrine_id, approach_tile = nearest_shrine
+        
+        # Add path to this shrine
+        path = distance_calc.get_shortest_path(current_pos, approach_tile)
+        if path:
+            if new_route[-1] == path[0]:
+                new_route.extend(path[1:])
             else:
-                new_route.extend(to_shrine)
-            shrine_positions.append(shrine_id)
+                new_route.extend(path)
+            all_shrines.remove(shrine_id)
+            shrines_added += 1
     
     # Return to Zeus after visiting shrines
     if zeus_tile and new_route[-1] != zeus_tile.id:
@@ -196,4 +209,4 @@ def add_shrines_to_route(route: List[str], grid: HexGrid, already_visited: Set[s
             else:
                 new_route.extend(return_path)
     
-    return new_route, shrine_positions
+    return new_route

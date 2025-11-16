@@ -34,9 +34,3 @@ CYCLE_DEFINITIONS = [
     ["tile_094", "tile_053", "tile_071", "tile_063", "tile_112"],
 ]
 
-# ============================================================================
-# Shrine tiles to visit after completing all cycles
-# Add or remove tiles from this list to change how many shrines are visited
-# ============================================================================
-
-SHRINE_TILES = ["tile_003", "tile_016", "tile_023"]

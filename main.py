@@ -10,13 +10,13 @@ import sys
 from src.tasks import TaskManager
 from src.simulator import RouteSimulator
 from src.heuristic import CycleHeuristic, add_shrines_to_route
-from src.grid import HexGrid
-from src.cycles import SHRINE_TILES
+from src.grid import HexGrid, TileType
 from src.visualiser import HexGridVisualiser
 
 # Hardcoded constants for map1.json
 MAP_PATH = "data/maps/map1.json"
 COLOURS = ["pink", "blue", "green"]
+TARGET_SHRINES = 3
 
 
 def main():
@@ -34,32 +34,32 @@ def main():
         heuristic = CycleHeuristic(grid, task_manager)
         route, stats = heuristic.solve()
         
-        # 4. Simulate initial route to see which shrines were encountered
+        # 4. Simulate cycle route - shrines will be built opportunistically if encountered
         simulator = RouteSimulator(grid, task_manager)
-        initial_result = simulator.simulate_route(route, [])
-        shrines_built_during_cycles = len(initial_result.shrines_built)
+        cycle_result = simulator.simulate_route(route)
+        shrines_built = len(cycle_result.shrines_built)
         
-        # 5. Add extra shrines only if we need more to reach 3
-        target_shrines = 3
-        if shrines_built_during_cycles < target_shrines:
-            visited_tiles = set(route)
-            already_built = set(initial_result.shrines_built)
-            optimised_route, extra_shrine_positions = add_shrines_to_route(
-                route, grid, visited_tiles, already_built, target_shrines - shrines_built_during_cycles
+        # 5. If we need more shrines, find nearest unbuilt ones and add to route
+        if shrines_built < TARGET_SHRINES:
+            optimised_route = add_shrines_to_route(
+                route, grid, set(cycle_result.shrines_built), TARGET_SHRINES - shrines_built
             )
+            # Re-simulate with the extended route
+            task_manager_fresh = TaskManager(grid)
+            task_manager_fresh.assign_colours(COLOURS)
+            task_manager_fresh.select_tasks_for_colours()
+            simulator = RouteSimulator(grid, task_manager_fresh)
+            simulation_result = simulator.simulate_route(optimised_route)
         else:
             optimised_route = route
-            extra_shrine_positions = []
-        
-        # 6. Simulate final route execution
-        all_shrine_positions = list(set(initial_result.shrines_built + extra_shrine_positions))
-        simulation_result = simulator.simulate_route(optimised_route, all_shrine_positions)
+            simulation_result = cycle_result
         
         # 6. Display results
         print("\n" + "="*50)
         print(f"Route: {simulation_result.total_moves} moves, {simulation_result.total_turns} turns")
         print(f"Tasks: {len(simulation_result.completed_tasks)}/15 completed")
-        print(f"Shrines: {len(simulation_result.shrines_built)}/{len(SHRINE_TILES)} built")
+        print(f"Shrines: {len(simulation_result.shrines_built)}/{TARGET_SHRINES} built")
+        print(f"Shrines built: {simulation_result.shrines_built}")
         print("="*50)
         
         # 7. Visualise
