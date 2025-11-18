@@ -134,7 +134,7 @@ def validate_task_sequence(tasks: List[Task], starting_inventory: dict) -> Tuple
     """
     Validate that a sequence of tasks respects game rules:
     - Can't carry more than 2 items at once
-    - Must pickup before delivery
+    - Must pickup before delivery (matching type and color)
     
     Returns (is_valid, ending_inventory)
     """
@@ -145,12 +145,22 @@ def validate_task_sequence(tasks: List[Task], starting_inventory: dict) -> Tuple
             total_cargo = sum(inventory.values())
             if total_cargo >= 2:
                 return False, {}
-            inventory[task.color] = inventory.get(task.color, 0) + 1
+            # Use (type, color) as key to distinguish statues from offerings
+            key = (task.type, task.color)
+            inventory[key] = inventory.get(key, 0) + 1
             
         elif 'delivery' in task.type:
-            if inventory.get(task.color, 0) <= 0:
+            # Match the corresponding pickup type
+            if 'statue' in task.type:
+                key = ('statue_pickup', task.color)
+            elif 'offering' in task.type:
+                key = ('offering_pickup', task.color)
+            else:
                 return False, {}
-            inventory[task.color] -= 1
+            
+            if inventory.get(key, 0) <= 0:
+                return False, {}
+            inventory[key] -= 1
     
     return True, inventory
 
@@ -169,7 +179,7 @@ def order_groups_into_route(groups: List[List[Task]], zeus_coord: Tuple[int, int
     ordered_route = []
     remaining = groups[:]
     current_pos = zeus_coord
-    current_inventory = {}  # Ensure this is always a dict, never None
+    current_inventory = {}
     cycle_num = 1
     
     while remaining:
@@ -186,10 +196,10 @@ def order_groups_into_route(groups: List[List[Task]], zeus_coord: Tuple[int, int
             
             # Try all possible orderings of tasks within the group
             for ordering in permutations(group):
+                # Ensure current_inventory is always a dict
+                inventory_to_use = current_inventory if current_inventory is not None else {}
                 # Check if this ordering is valid given current inventory
-                # Ensure current_inventory is always a dict, never None
-                inventory_for_validation = current_inventory if current_inventory is not None else {}
-                is_valid, ending_inventory = validate_task_sequence(list(ordering), inventory_for_validation)
+                is_valid, ending_inventory = validate_task_sequence(list(ordering), inventory_to_use)
                 if not is_valid:
                     continue
                 
@@ -217,6 +227,7 @@ def order_groups_into_route(groups: List[List[Task]], zeus_coord: Tuple[int, int
             raise ValueError("Cannot find valid route - check task constraints")
         
         logging.info(f"Selected: {[t.id for t in best_ordering]} (distance: {best_distance})")
+        logging.info(f"Ending inventory: {best_ending_inventory}")
         
         ordered_route.append(best_ordering)
         current_pos = best_ordering[-1].coord
@@ -419,7 +430,7 @@ def select_tasks_from_map(data: dict, colors: List[str]) -> Tuple[List[Task], se
 
 def main():
     # Load map
-    with open('../data/maps/map1.json', 'r') as f:
+    with open('data/maps/map1.json', 'r') as f:
         data = json.load(f)
     
     # Configuration

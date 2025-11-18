@@ -259,17 +259,27 @@ def validate_task_sequence(tasks: List[Task], starting_inventory: dict) -> Tuple
             total_cargo = sum(inventory.values())
             if total_cargo >= 2:
                 return False, {}
-            inventory[task.color] = inventory.get(task.color, 0) + 1
+            # Use (type, color) as key to distinguish statues from offerings
+            key = (task.type, task.color)
+            inventory[key] = inventory.get(key, 0) + 1
             
         elif 'delivery' in task.type:
-            if inventory.get(task.color, 0) <= 0:
+            # Match the corresponding pickup type
+            if 'statue' in task.type:
+                key = ('statue_pickup', task.color)
+            elif 'offering' in task.type:
+                key = ('offering_pickup', task.color)
+            else:
                 return False, {}
-            inventory[task.color] -= 1
+            
+            if inventory.get(key, 0) <= 0:
+                return False, {}
+            inventory[key] -= 1
     
     return True, inventory
 ```
 
-**What it does**: Validates that a sequence of tasks respects game rules (max 2 cargo, pickup before delivery).
+**What it does**: Validates that a sequence of tasks respects game rules (max 2 cargo, pickup before delivery with matching types).
 
 **How it works**:
 1. Makes a copy of the starting inventory (what you're already carrying)
@@ -277,15 +287,22 @@ def validate_task_sequence(tasks: List[Task], starting_inventory: dict) -> Tuple
    - **For pickups**: 
      - Counts total cargo using `sum(inventory.values())`
      - If already carrying 2 items, returns `False` (invalid)
-     - Otherwise adds 1 to the count for that color
+     - Creates a key using **(task.type, task.color)** - e.g., `('statue_pickup', 'pink')`
+     - This distinguishes pink statues from pink offerings
+     - Adds 1 to the count for that key
    - **For deliveries**:
-     - Checks if you have at least 1 of that color
+     - Determines which pickup type corresponds to this delivery
+     - For `statue_delivery`, looks for `statue_pickup` of same color
+     - For `offering_delivery`, looks for `offering_pickup` of same color
+     - Checks if you have at least 1 of that specific item type and color
      - If not, returns `False` (can't deliver what you don't have)
      - Otherwise subtracts 1 from the count
 3. If all tasks pass, returns `True` and the final inventory state
 
+**Why (type, color) keys matter**: Without this, a pink offering could be mistaken for a pink statue! The inventory must track that `('statue_pickup', 'pink')` is different from `('offering_pickup', 'pink')`.
+
 **Programming concepts**:
-- `dict`: A dictionary is a collection of key-value pairs. `{'pink': 2, 'blue': 1}` means 2 pink items and 1 blue item.
+- `dict`: A dictionary is a collection of key-value pairs. Keys can be tuples: `{('statue_pickup', 'pink'): 1, ('offering_pickup', 'blue'): 1}`
 - `.copy()`: Creates a copy of a dictionary so changes don't affect the original.
 - `.values()`: Returns all the values in a dictionary (without the keys).
 - `sum()`: Adds up all numbers in a collection.
