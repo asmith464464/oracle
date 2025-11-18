@@ -1,7 +1,4 @@
 {
-    "python.analysis.extraPaths": [
-        "./src"
-    ],
     "kdb.connectionMap": {},
     "kdb.targetMap": {}
 }
